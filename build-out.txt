@@ -1,0 +1,10 @@
+[36mvite v5.4.21 [32mbuilding for production...[36m[39m
+transforming...
+[32m✓[39m 14 modules transformed.
+
+PWA v0.20.1
+mode      generateSW
+precache  16 entries (503.35 KiB)
+files generated
+  dist/sw.js
+  dist/workbox-e4022e15.js

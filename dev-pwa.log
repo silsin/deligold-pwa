@@ -1,0 +1,34 @@
+
+> delly-gold-trading@1.0.0 dev
+> vite
+
+
+  [32m[1mVITE[22m v5.4.21[39m  [2mready in [0m[1m2112[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+  [32m➜[39m  [1mNetwork[22m: [36mhttp://10.183.59.225:[1m5173[22m/[39m
+  [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.8.116:[1m5173[22m/[39m
+  [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.16.1:[1m5173[22m/[39m
+[2m11:54:13 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.vue, /src/views/SettingsView.vue[22m
+[2m11:54:13 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.vue, /src/views/SettingsView.vue[22m
+[2m11:54:14 AM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.vue, /src/views/SettingsView.vue[22m
+[2m12:59:32 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/BoardView.vue[22m
+[2m12:59:32 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/BoardView.vue[22m
+[2m1:03:18 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/BoardView.vue?vue&type=style&index=0&scoped=b5caf4b0&lang.css[22m
+[2m1:03:22 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/BoardView.vue?vue&type=style&index=0&scoped=b5caf4b0&lang.css[22m
+[2m1:03:23 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/BoardView.vue?vue&type=style&index=0&scoped=b5caf4b0&lang.css[22m
+[2m1:04:48 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/BoardView.vue?vue&type=style&index=0&scoped=b5caf4b0&lang.css[22m
+[2m1:05:14 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/BoardView.vue?vue&type=style&index=0&scoped=b5caf4b0&lang.css[22m
+[2m1:05:24 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/BoardView.vue?vue&type=style&index=0&scoped=b5caf4b0&lang.css[22m
+[2m1:06:14 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/BoardView.vue?vue&type=style&index=0&scoped=b5caf4b0&lang.css[22m
+[2m1:06:18 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/BoardView.vue?vue&type=template&index=0&lang.js[22m
+[2m1:28:49 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/BoardView.vue?vue&type=style&index=0&scoped=b5caf4b0&lang.css[22m
+[2m1:41:54 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/BoardView.vue?vue&type=style&index=0&scoped=b5caf4b0&lang.css[22m
+[2m1:42:22 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/BoardView.vue?vue&type=style&index=0&scoped=b5caf4b0&lang.css[22m
+[2m1:42:49 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/BoardView.vue?vue&type=style&index=0&scoped=b5caf4b0&lang.css[22m
+[2m1:54:08 PM[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/router/index.js[22m
+[2m1:57:18 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/BoardView.vue?vue&type=style&index=0&scoped=b5caf4b0&lang.css[22m
+[2m2:00:58 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/BoardView.vue?vue&type=template&index=0&lang.js[22m
+[2m2:01:05 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/BoardView.vue[22m
+[2m2:01:22 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/BoardView.vue?vue&type=style&index=0&scoped=b5caf4b0&lang.css[22m
+[2m2:17:03 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/PriceChart.vue[22m

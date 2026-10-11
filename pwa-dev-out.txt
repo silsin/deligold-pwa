@@ -1,0 +1,14 @@
+
+  [32m[1mVITE[22m v5.4.21[39m  [2mready in [0m[1m1219[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+  [32m➜[39m  [1mNetwork[22m: [36mhttp://10.185.157.95:[1m5173[22m/[39m
+  [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.8.116:[1m5173[22m/[39m
+  [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.16.1:[1m5173[22m/[39m
+[2m9:41:13 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.vue, /src/components/TermsModal.vue, /src/views/BoardView.vue, /src/views/TradingView.vue, /src/views/MarketsView.vue, /src/views/PortfolioView.vue, /src/views/TradeHistoryView.vue, /src/views/OrdersView.vue, /src/views/AccountView.vue, /src/views/SettingsView.vue, /src/views/LoginView.vue, /src/components/TickerTape.vue, /src/components/PriceChart.vue, /src/components/OrderBook.vue, /src/components/MarketSheet.vue[22m
+[2m9:42:21 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.vue, /src/components/TermsModal.vue, /src/views/BoardView.vue, /src/views/TradingView.vue, /src/views/MarketsView.vue, /src/views/PortfolioView.vue, /src/views/TradeHistoryView.vue, /src/views/OrdersView.vue, /src/views/AccountView.vue, /src/views/SettingsView.vue, /src/views/LoginView.vue, /src/components/TickerTape.vue, /src/components/PriceChart.vue, /src/components/OrderBook.vue, /src/components/MarketSheet.vue[22m
+[2m9:51:27 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/OrdersView.vue, /src/views/OrdersView.vue?vue&type=style&index=0&scoped=51e8d8e7&lang.css[22m
+[2m9:51:27 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/AccountView.vue, /src/views/AccountView.vue?vue&type=style&index=0&scoped=b9c4f013&lang.css[22m
+[2m10:01:20 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/OrdersView.vue, /src/views/OrdersView.vue?vue&type=style&index=0&scoped=51e8d8e7&lang.css[22m
+[2m10:14:45 PM[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/views/AccountView.vue, /src/views/AccountView.vue?vue&type=style&index=0&scoped=b9c4f013&lang.css[22m
+[2m10:26:49 PM[22m [36m[1m[vite][22m[39m [32mpage reload [39m[2msrc/router/index.js[22m
