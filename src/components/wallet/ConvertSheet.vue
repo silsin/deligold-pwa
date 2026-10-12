@@ -1,22 +1,22 @@
 <template>
-  <div class="sheet" role="dialog" aria-modal="true" aria-label="ØªØ¨Ø¯ÛŒÙ„ Ø·Ù„Ø§">
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="تبدیل طلا">
     <div class="sheet__scrim" @click="emit('close')"></div>
 
     <form class="sheet__panel" @submit.prevent="submit">
       <div class="sheet__head">
-        <strong>ØªØ¨Ø¯ÛŒÙ„ Ø·Ù„Ø§</strong>
-        <button type="button" class="sheet__x" aria-label="Ø¨Ø³ØªÙ†" @click="emit('close')">
+        <strong>تبدیل طلا</strong>
+        <button type="button" class="sheet__x" aria-label="بستن" @click="emit('close')">
           <i class="material-icons">close</i>
         </button>
       </div>
 
-      <!-- Source â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+      <!-- Source ───────────────────────────────────────────────────────────── -->
       <label class="field">
-        <span class="field__label">Ø§Ø²</span>
+        <span class="field__label">از</span>
         <select v-model="from" class="field__input field__input--sm" :disabled="busy" @change="onFrom">
-          <option v-if="!holdings.length" value="">Ù…ÙˆØ¬ÙˆØ¯ÛŒ Ø·Ù„Ø§ÛŒÛŒ Ù†Ø¯Ø§Ø±ÛŒØ¯</option>
+          <option v-if="!holdings.length" value="">موجودی طلایی ندارید</option>
           <option v-for="h in holdings" :key="h.symbol" :value="h.symbol">
-            {{ nameOf(h.symbol) }} â€” {{ faWeight(h.grams) }} {{ unitOf(h.symbol) }}
+            {{ nameOf(h.symbol) }} — {{ faWeight(h.grams) }} {{ unitOf(h.symbol) }}
           </option>
         </select>
       </label>
@@ -25,23 +25,23 @@
         <span class="material-icons" aria-hidden="true">arrow_downward</span>
       </div>
 
-      <!-- Target â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+      <!-- Target ───────────────────────────────────────────────────────────── -->
       <label class="field">
-        <span class="field__label">Ø¨Ù‡</span>
+        <span class="field__label">به</span>
         <select v-model="to" class="field__input field__input--sm" :disabled="busy || !from">
-          <option value="">Ø§Ù†ØªØ®Ø§Ø¨ Ù†Ù…Ø§Ø¯ Ù…Ù‚ØµØ¯â€¦</option>
+          <option value="">انتخاب نماد مقصد…</option>
           <option v-for="s in targets" :key="s.symbol" :value="s.symbol">
             {{ s.name || s.symbol }}
           </option>
         </select>
       </label>
 
-      <!-- Weight â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+      <!-- Weight ───────────────────────────────────────────────────────────── -->
       <label class="field field--mt">
         <span class="field__label">
-          ÙˆØ²Ù† Ø¨Ø±Ø§ÛŒ ØªØ¨Ø¯ÛŒÙ„
+          وزن برای تبدیل
           <small v-if="maxGrams > 0" class="field__max">
-            Ø­Ø¯Ø§Ú©Ø«Ø± {{ faWeight(maxGrams) }} {{ unitOf(from) }}
+            حداکثر {{ faWeight(maxGrams) }} {{ unitOf(from) }}
           </small>
         </span>
         <input
@@ -50,7 +50,7 @@
           type="text"
           inputmode="decimal"
           autocomplete="off"
-          placeholder="Û°"
+          placeholder="۰"
           :disabled="busy"
           @input="onInput"
         />
@@ -69,18 +69,18 @@
         </button>
       </div>
 
-      <!-- Quote preview â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+      <!-- Quote preview ────────────────────────────────────────────────────── -->
       <div v-if="quote" class="quote">
         <div class="quote__row">
-          <span>ÙØ±ÙˆØ´ {{ nameOf(from) }}</span>
+          <span>فروش {{ nameOf(from) }}</span>
           <b class="tnum">{{ faMoney(quote.grossAmount) }}</b>
         </div>
         <div class="quote__row quote__row--fee">
-          <span>Ú©Ø§Ø±Ù…Ø²Ø¯</span>
-          <b class="tnum">âˆ’{{ faMoney(quote.fee) }}</b>
+          <span>کارمزد</span>
+          <b class="tnum">−{{ faMoney(quote.fee) }}</b>
         </div>
         <div class="quote__row quote__row--net">
-          <span>Ø®Ø±ÛŒØ¯ {{ nameOf(to) }}</span>
+          <span>خرید {{ nameOf(to) }}</span>
           <b class="tnum">{{ faWeight(quote.gramsIn) }} {{ unitOf(to) }}</b>
         </div>
       </div>
@@ -89,11 +89,11 @@
 
       <button type="submit" class="sheet__cta" :disabled="!canSubmit || busy">
         <span v-if="busy" class="spin" aria-hidden="true"></span>
-        {{ busy ? 'Ø¯Ø± Ø­Ø§Ù„ ØªØ¨Ø¯ÛŒÙ„â€¦' : 'ØªØ£ÛŒÛŒØ¯ ØªØ¨Ø¯ÛŒÙ„' }}
+        {{ busy ? 'در حال تبدیل…' : 'تأیید تبدیل' }}
       </button>
 
       <p class="sheet__fine">
-        ØªØ¨Ø¯ÛŒÙ„ Ø¨Ø¯ÙˆÙ† ØªØºÛŒÛŒØ± Ù…ÙˆØ¬ÙˆØ¯ÛŒ Ù†Ù‚Ø¯ Ø§Ù†Ø¬Ø§Ù… Ù…ÛŒâ€ŒØ´ÙˆØ¯Ø› Ú©Ø§Ø±Ù…Ø²Ø¯ Ø§Ø² Ø§Ø±Ø²Ø´ ÙØ±ÙˆØ´ Ú©Ø³Ø± Ù…ÛŒâ€ŒÚ¯Ø±Ø¯Ø¯.
+        تبدیل بدون تغییر موجودی نقد انجام می‌شود؛ کارمزد از ارزش فروش کسر می‌گردد.
       </p>
     </form>
   </div>
@@ -105,14 +105,14 @@ import { computed, ref, watch } from 'vue'
 import { faMoney, faWeight, faPercent } from '../../utils/format'
 
 const props = defineProps({
-  /** Holdings the user actually owns â€” the only valid sources. */
+  /** Holdings the user actually owns — the only valid sources. */
   holdings: { type: Array, default: () => [] },
   /** Every tradeable symbol, so the user can convert into something new. */
   symbols: { type: Array, default: () => [] },
   prices: { type: Object, default: () => ({}) },
   feePercent: { type: Number, default: 0.5 },
   busy: { type: Boolean, default: false },
-  /** Symbol the user tapped Â«ØªØ¨Ø¯ÛŒÙ„Â» on, so the sheet opens pre-filled. */
+  /** Symbol the user tapped «تبدیل» on, so the sheet opens pre-filled. */
   presetFrom: { type: String, default: '' }
 })
 const emit = defineEmits(['close', 'submit'])
@@ -126,8 +126,8 @@ const grams = ref(0)
 const error = ref('')
 
 const metaOf = symbol => props.symbols.find(s => s.symbol === symbol)
-const nameOf = symbol => metaOf(symbol)?.name ?? symbol ?? 'â€”'
-const unitOf = symbol => metaOf(symbol)?.unit ?? 'Ú¯Ø±Ù…'
+const nameOf = symbol => metaOf(symbol)?.name ?? symbol ?? '—'
+const unitOf = symbol => metaOf(symbol)?.unit ?? 'گرم'
 
 /** Destination list excludes the source, so a no-op swap can't be submitted. */
 const targets = computed(() => props.symbols.filter(s => s.symbol !== from.value))
@@ -179,8 +179,8 @@ function onFrom() {
 
 /** Accepts Persian digits and a dot; anything else is dropped as you type. */
 function parseWeight(value) {
-  const kept = value.replace(/[^\dÛ°-Û¹.]/g, '').replace(/[Û°-Û¹]/g, d =>
-    String('Û°Û±Û²Û³Û´ÛµÛ¶Û·Û¸Û¹'.indexOf(d))
+  const kept = value.replace(/[^\d۰-۹.]/g, '').replace(/[۰-۹]/g, d =>
+    String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
   )
   return Number(kept) || 0
 }
@@ -188,7 +188,7 @@ function parseWeight(value) {
 function onInput() {
   grams.value = parseWeight(raw.value)
   if (maxGrams > 0 && grams.value > maxGrams + 1e-9)
-    error.value = 'ÙˆØ²Ù† Ø¯Ø±Ø®ÙˆØ§Ø³ØªÛŒ Ø§Ø² Ù…ÙˆØ¬ÙˆØ¯ÛŒ Ø´Ù…Ø§ Ø¨ÛŒØ´ØªØ± Ø§Ø³Øª'
+    error.value = 'وزن درخواستی از موجودی شما بیشتر است'
   else error.value = ''
 }
 

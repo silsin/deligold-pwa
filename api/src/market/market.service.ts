@@ -15,7 +15,7 @@ import {
  * The API is the single place that reads an upstream quote, so the number a
  * customer sees, the number an order fills at and the number a report values a
  * position at are all the same reading. A client-supplied price is never
- * trusted â€” that is the whole reason pricing lives here rather than in the
+ * trusted — that is the whole reason pricing lives here rather than in the
  * order handler.
  *
  * Quotes are cached briefly: the board is polled by every open client, and a
@@ -24,7 +24,7 @@ import {
  */
 export interface Quote {
   symbol: string;
-  /** Mid/base price in Toman â€” what the board displays. */
+  /** Mid/base price in Toman — what the board displays. */
   price: number;
   /** What the shop BUYS at (a customer selling). Null when the source has no spread. */
   buy: number | null;
@@ -73,7 +73,7 @@ export class MarketService {
    * The current board, fetching a fresh one when the cache has expired.
    *
    * Concurrent callers share one in-flight fetch rather than each triggering
-   * their own â€” the board is polled by every connected client, so without this
+   * their own — the board is polled by every connected client, so without this
    * a single tick would fan out into dozens of upstream requests.
    */
   async board(): Promise<Board> {
@@ -104,7 +104,7 @@ export class MarketService {
    * The price an order fills at.
    *
    * A customer BUYING pays the shop's ask (`sell`), and a customer SELLING
-   * receives the shop's bid (`buy`) â€” the same two-sided quoting the physical
+   * receives the shop's bid (`buy`) — the same two-sided quoting the physical
    * shops use. When a source carries no spread we synthesise one from the mid,
    * so the platform never fills both sides at the same number.
    */
@@ -145,7 +145,7 @@ export class MarketService {
       // No credentials: the feed cannot be read, so say so loudly rather than
       // silently serving numbers nobody set.
       this.logger.error(
-        'MARKET_UID / MARKET_TOKEN are not set â€” the board cannot fetch real prices and will ' +
+        'MARKET_UID / MARKET_TOKEN are not set — the board cannot fetch real prices and will ' +
           'show indicative fallback values. Set them in the environment (see api/.env).',
       );
       return this.fallbackBoard();
@@ -160,7 +160,7 @@ export class MarketService {
   /**
    * Builds quotes from the upstream's row map.
    *
-   * A row we cannot map, or one the shop has switched off, is simply absent â€”
+   * A row we cannot map, or one the shop has switched off, is simply absent —
    * the board never invents a price for an instrument it was not given.
    */
   private mapUpstream(upstream: UpstreamBoard): Record<string, Quote> {

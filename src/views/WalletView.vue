@@ -2,15 +2,15 @@
   <div class="page">
     <header class="head">
       <div>
-        <h1 class="title">Ú©ÛŒÙ Ù¾ÙˆÙ„</h1>
-        <p class="sub">Ù…ÙˆØ¬ÙˆØ¯ÛŒ Ù†Ù‚Ø¯ØŒ Ø·Ù„Ø§Ù‡Ø§ÛŒ Ø´Ù…Ø§ Ùˆ Ú¯Ø±Ø¯Ø´ Ø­Ø³Ø§Ø¨</p>
+        <h1 class="title">کیف پول</h1>
+        <p class="sub">موجودی نقد، طلاهای شما و گردش حساب</p>
       </div>
       <button
         type="button"
         class="icon-btn material-icons"
         :class="{ 'is-busy': refreshing }"
         :disabled="refreshing"
-        title="Ø¨Ø§Ø²Ø¢ÙˆØ±ÛŒ"
+        title="بازآوری"
         @click="refresh"
       >
         refresh
@@ -19,36 +19,36 @@
 
     <div v-if="!auth.isLoggedIn" class="empty">
       <span class="material-icons empty__icon">account_balance_wallet</span>
-      <p class="empty__text">Ø¨Ø±Ø§ÛŒ Ø¯ÛŒØ¯Ù† Ú©ÛŒÙ Ù¾ÙˆÙ„ØŒ Ø§Ø¨ØªØ¯Ø§ ÙˆØ§Ø±Ø¯ Ø´ÙˆÛŒØ¯</p>
+      <p class="empty__text">برای دیدن کیف پول، ابتدا وارد شوید</p>
       <button type="button" class="btn btn--primary" @click="openLogin('login')">
-        <span class="material-icons">login</span> ÙˆØ±ÙˆØ¯ Ø¨Ù‡ Ø­Ø³Ø§Ø¨
+        <span class="material-icons">login</span> ورود به حساب
       </button>
     </div>
 
     <template v-else>
-      <!-- Balance card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+      <!-- Balance card ─────────────────────────────────────────────────────── -->
       <section class="balance">
         <div class="balance__top">
           <span class="balance__label">
             <span class="material-icons">account_balance_wallet</span>
-            Ù…ÙˆØ¬ÙˆØ¯ÛŒ Ù†Ù‚Ø¯
+            موجودی نقد
           </span>
-          <span class="balance__pill">Ú©Ø§Ø±Ù…Ø²Ø¯ {{ faPercent(auth.feePercent, 2) }}</span>
+          <span class="balance__pill">کارمزد {{ faPercent(auth.feePercent, 2) }}</span>
         </div>
 
         <div class="balance__value tnum">{{ faMoney(auth.balance) }}</div>
 
         <div class="balance__cells">
           <div class="balance__cell">
-            <small>Ø§Ø±Ø²Ø´ Ú©Ù„ Ø¯Ø§Ø±Ø§ÛŒÛŒ</small>
+            <small>ارزش کل دارایی</small>
             <b class="tnum">{{ faMoney(auth.equity) }}</b>
           </div>
           <div class="balance__cell">
-            <small>Ø§Ø±Ø²Ø´ Ø·Ù„Ø§</small>
+            <small>ارزش طلا</small>
             <b class="tnum">{{ faMoney(goldValue) }}</b>
           </div>
           <div class="balance__cell">
-            <small>Ø³ÙˆØ¯/Ø²ÛŒØ§Ù† Ø¨Ø§Ø²</small>
+            <small>سود/زیان باز</small>
             <b class="tnum" :class="auth.totalPnl >= 0 ? 'is-up' : 'is-down'">
               {{ faDelta(auth.totalPnl) }}
             </b>
@@ -57,7 +57,7 @@
 
         <div class="balance__actions">
           <button type="button" class="act act--in" @click="openPanel('deposit')">
-            <span class="material-icons">add</span> ÙˆØ§Ø±ÛŒØ²
+            <span class="material-icons">add</span> واریز
           </button>
           <button
             type="button"
@@ -65,7 +65,7 @@
             :disabled="auth.balance <= 0"
             @click="openPanel('withdraw')"
           >
-            <span class="material-icons">remove</span> Ø¨Ø±Ø¯Ø§Ø´Øª
+            <span class="material-icons">remove</span> برداشت
           </button>
           <button
             type="button"
@@ -73,7 +73,7 @@
             :disabled="!holdings.length"
             @click="openPanel('convert')"
           >
-            <span class="material-icons">swap_horiz</span> ØªØ¨Ø¯ÛŒÙ„ Ø·Ù„Ø§
+            <span class="material-icons">swap_horiz</span> تبدیل طلا
           </button>
         </div>
       </section>
@@ -85,17 +85,17 @@
         <span class="material-icons">info</span> {{ convertNotice }}
       </p>
 
-      <!-- Gold holdings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+      <!-- Gold holdings ────────────────────────────────────────────────────── -->
       <section class="block">
         <h2 class="block__title">
-          <span class="material-icons">inventory_2</span> Ø·Ù„Ø§Ù‡Ø§ÛŒ Ù…Ù†
+          <span class="material-icons">inventory_2</span> طلاهای من
         </h2>
 
         <div v-if="!holdings.length" class="empty empty--inline">
           <span class="material-icons empty__icon">hourglass_empty</span>
-          <p class="empty__text">Ù‡Ù†ÙˆØ² Ø·Ù„Ø§ÛŒÛŒ Ù†Ø¯Ø§Ø±ÛŒØ¯ â€” Ø§Ø² ØµÙØ­Ù‡ Ù…Ø¹Ø§Ù…Ù„Ø§Øª Ø®Ø±ÛŒØ¯ Ú©Ù†ÛŒØ¯</p>
+          <p class="empty__text">هنوز طلایی ندارید — از صفحه معاملات خرید کنید</p>
           <button type="button" class="btn" @click="$router.push('/trade')">
-            Ø±ÙØªÙ† Ø¨Ù‡ Ù…Ø¹Ø§Ù…Ù„Ø§Øª
+            رفتن به معاملات
           </button>
         </div>
 
@@ -105,7 +105,7 @@
             <div class="holding__main">
               <b class="holding__name">{{ nameOf(h.symbol) }}</b>
               <small class="muted">
-                Ù…ÛŒØ§Ù†Ú¯ÛŒÙ† Ø®Ø±ÛŒØ¯ {{ faMoney(h.avgCost) }} / {{ unitOf(h.symbol) }}
+                میانگین خرید {{ faMoney(h.avgCost) }} / {{ unitOf(h.symbol) }}
               </small>
             </div>
             <div class="holding__side">
@@ -117,7 +117,7 @@
             <button
               type="button"
               class="holding__swap material-icons"
-              title="ØªØ¨Ø¯ÛŒÙ„ Ø¨Ù‡ Ù†Ù…Ø§Ø¯ Ø¯ÛŒÚ¯Ø±"
+              title="تبدیل به نماد دیگر"
               @click="startConvert(h.symbol)"
             >
               swap_horiz
@@ -126,17 +126,17 @@
         </ul>
       </section>
 
-      <!-- Statement â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+      <!-- Statement ────────────────────────────────────────────────────────── -->
       <section class="block">
         <h2 class="block__title">
-          <span class="material-icons">receipt_long</span> Ú¯Ø±Ø¯Ø´ Ø­Ø³Ø§Ø¨
+          <span class="material-icons">receipt_long</span> گردش حساب
           <small v-if="auth.transactions.length" class="muted">
-            {{ toFa(auth.transactions.length) }} ØªØ±Ø§Ú©Ù†Ø´
+            {{ toFa(auth.transactions.length) }} تراکنش
           </small>
         </h2>
 
         <div v-if="!auth.transactions.length" class="empty empty--inline">
-          <p class="empty__text">ØªØ±Ø§Ú©Ù†Ø´ÛŒ Ø«Ø¨Øª Ù†Ø´Ø¯Ù‡ Ø§Ø³Øª</p>
+          <p class="empty__text">تراکنشی ثبت نشده است</p>
         </div>
 
         <ul v-else class="ledger">
@@ -146,7 +146,7 @@
             </span>
             <div class="tx__main">
               <b class="tx__kind">{{ faTxKind(tx.kind) }}</b>
-              <small class="muted tx__note">{{ tx.note || 'â€”' }}</small>
+              <small class="muted tx__note">{{ tx.note || '—' }}</small>
             </div>
             <div class="tx__side">
               <b class="tnum" :class="`is-${txKindTone(tx.kind)}`">
@@ -159,7 +159,7 @@
       </section>
     </template>
 
-    <!-- â”€â”€ Sheets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+    <!-- ── Sheets ───────────────────────────────────────────────────────────── -->
     <DepositSheet
       v-if="panel === 'deposit'"
       :busy="auth.loading"
@@ -221,8 +221,17 @@ const holdings = computed(() =>
     .sort((a, b) => b.grams - a.grams)
 )
 
-/** Market value of the gold = total equity minus the cash balance. */
-const goldValue = computed(() => Math.max(0, auth.equity - auth.balance))
+/**
+ * Market value of the gold, summed from the live positions.
+ *
+ * Deliberately not `equity - balance`: the two are derived from the same
+ * holdings on the server, so subtracting them only gives the right answer when
+ * both calls agree. Summing `marketValue` directly is what the user sees listed
+ * below, so the hero and the list can never disagree.
+ */
+const goldValue = computed(() =>
+  holdings.value.reduce((sum, h) => sum + (Number(h.marketValue) || 0), 0)
+)
 
 /** Live price per symbol, for the convert sheet's quote preview. */
 const priceMap = computed(() => market.prices)
@@ -238,11 +247,11 @@ const symbolOptions = computed(() =>
 )
 
 const metaOf = symbol => market.symbols.find(s => s.symbol === symbol)
-const nameOf = symbol => metaOf(symbol)?.name ?? symbol ?? 'â€”'
-const unitOf = symbol => metaOf(symbol)?.unit ?? 'Ú¯Ø±Ù…'
+const nameOf = symbol => metaOf(symbol)?.name ?? symbol ?? '—'
+const unitOf = symbol => metaOf(symbol)?.unit ?? 'گرم'
 
 /**
- * Coins are counted per piece, gold is weighed â€” so pick the glyph by the
+ * Coins are counted per piece, gold is weighed — so pick the glyph by the
  * symbol's `kind` rather than inventing an icon per symbol. (`kind` comes from
  * the server's TRADE_SYMBOLS; there is no `icon` field to read.)
  */
@@ -265,7 +274,7 @@ function startConvert(symbol) {
 async function refresh() {
   refreshing.value = true
   try {
-    await Promise.all([auth.fetchWallet(100), market.fetchMarket({ withChart: false })])
+    await Promise.all([auth.fetchWalletBundle(), market.fetchMarket({ withChart: false })])
   } finally {
     refreshing.value = false
   }
@@ -274,20 +283,25 @@ async function refresh() {
 async function doDeposit(amount) {
   // Store signature: requestDeposit(amount, method, reference, note).
   const { ok } = await auth.requestDeposit(amount, 'BANK_TRANSFER', '', '')
-  if (ok) panel.value = ''
+  if (ok) {
+    // The ledger is a separate endpoint from the wallet, so it needs its own
+    // refresh or the entry the user just made will not appear.
+    await auth.fetchTransactions()
+    panel.value = ''
+  }
 }
 
 async function doWithdraw({ amount, note }) {
   // Store signature: requestWithdrawal(amount, destination, note). The sheet
   // only collects an optional note, so destination falls back to the note.
-  const { ok } = await auth.requestWithdrawal(amount, note || 'Ø¨Ø±Ø¯Ø§Ø´Øª ÙˆØ¬Ù‡', note || '')
+  const { ok } = await auth.requestWithdrawal(amount, note || 'برداشت وجه', note || '')
   if (ok) panel.value = ''
 }
 
 const convertNotice = ref('')
 async function doConvert() {
-  // Backend has no convert endpoint â€” surface a Persian no-op notice instead.
-  convertNotice.value = 'Ø§Ù…Ú©Ø§Ù† ØªØ¨Ø¯ÛŒÙ„ Ø·Ù„Ø§ Ø¯Ø± Ø­Ø§Ù„ Ø­Ø§Ø¶Ø± ÙØ¹Ø§Ù„ Ù†ÛŒØ³Øª'
+  // Backend has no convert endpoint — surface a Persian no-op notice instead.
+  convertNotice.value = 'امکان تبدیل طلا در حال حاضر فعال نیست'
   panel.value = ''
 }
 
@@ -308,7 +322,7 @@ onUnmounted(() => {
 
 
 <style scoped>
-/* â”€â”€ Layout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Layout ──────────────────────────────────────────────────────────────── */
 .page {
   max-width: 560px;
   margin: 0 auto;
@@ -368,7 +382,7 @@ onUnmounted(() => {
   animation: wallet-spin 0.9s linear infinite;
 }
 
-/* â”€â”€ Balance hero â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Balance hero ────────────────────────────────────────────────────────── */
 .balance {
   padding: 18px 16px 16px;
   border-radius: var(--radius);
@@ -446,7 +460,7 @@ onUnmounted(() => {
   font-weight: 800;
 }
 
-/* â”€â”€ Deposit / withdraw / convert â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Deposit / withdraw / convert ────────────────────────────────────────── */
 .balance__actions {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -500,7 +514,7 @@ onUnmounted(() => {
   color: var(--accent);
 }
 
-/* â”€â”€ Section blocks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Section blocks ──────────────────────────────────────────────────────── */
 .block {
   display: flex;
   flex-direction: column;
@@ -531,7 +545,7 @@ onUnmounted(() => {
   color: var(--text-muted);
 }
 
-/* â”€â”€ Holdings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Holdings ────────────────────────────────────────────────────────────── */
 .holdings,
 .ledger {
   list-style: none;
@@ -605,7 +619,7 @@ onUnmounted(() => {
   font-weight: 700;
 }
 
-/* â”€â”€ Statement â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Statement ───────────────────────────────────────────────────────────── */
 .tx {
   display: flex;
   align-items: center;
@@ -664,7 +678,7 @@ onUnmounted(() => {
   font-size: 10px;
 }
 
-/* â”€â”€ Empty states â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Empty states ────────────────────────────────────────────────────────── */
 .empty {
   display: flex;
   flex-direction: column;
@@ -697,7 +711,7 @@ onUnmounted(() => {
   color: var(--text-muted);
 }
 
-/* â”€â”€ Buttons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
 .btn {
   padding: 10px 20px;
   border-radius: 10px;
@@ -723,7 +737,7 @@ onUnmounted(() => {
   border-color: var(--accent-light);
 }
 
-/* â”€â”€ Sign / tone colours â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Sign / tone colours ─────────────────────────────────────────────────── */
 .is-up {
   color: var(--up);
 }
@@ -791,7 +805,7 @@ onUnmounted(() => {
   border-color: var(--accent);
 }
 
-/* â”€â”€ Notices â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Notices ─────────────────────────────────────────────────────────────── */
 .alert {
   display: flex;
   align-items: center;
