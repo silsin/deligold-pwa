@@ -1,0 +1,21 @@
+style(wallet): give WalletView a real design
+
+WalletView was the only view with no <style> block at all, so it rendered as
+raw unstyled text: the balance hero, holdings, ledger rows and the action
+buttons had no layout, spacing, colour or states.
+
+Adds a scoped stylesheet matching the app tokens (--accent, --surface,
+--card, --up/--down, --radius-*) and the existing sheet/portfolio language:
+
+- balance hero with value, equity/gold-value/PnL cells and 3 actions
+- holdings rows with icon, avg cost, weight and live PnL tone
+- ledger rows with per-kind icon/amount tones
+- empty states, alerts, refresh spinner, <=360px adjustments
+
+Also fixes the corruption from the incremental append that produced this
+file: CSS that had landed after </style> (so .holding__swap, .alert and the
+wallet-spin keyframes were silently dropped) and two unclosed blocks
+(.act .material-icons, .holding__side small) that failed the build.
+
+Verified: build passes, all 65 template classes resolve to a rule, and the
+selectors are present in the emitted CSS bundle.
