@@ -26,6 +26,9 @@ WORKDIR /app
 # Dependencies first: this layer is cached until package*.json actually change,
 # so ordinary source edits never re-download the whole tree.
 COPY package.json package-lock.json ./
+# Pin the registry inside the image too, so the install can never drift to a
+# mirror that the lockfile's `resolved` URLs were not generated against.
+COPY .npmrc ./
 # `npm ci`, not `npm install`: reproducible, and it fails loudly if the lockfile
 # has drifted from package.json instead of silently resolving new versions.
 # Every dependency here is a runtime dep in package.json (Vite included), so
