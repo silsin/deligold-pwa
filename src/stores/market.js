@@ -3,12 +3,11 @@ import { ref, computed } from 'vue'
 import { api } from '../utils/api'
 
 /**
- * Live price feed + chart series for every trade symbol.
+ * Live price board for the NestJS market service.
  *
- * Data comes from the site's own price pipeline, so this store is a thin cache:
- * the SINGLE poller (started by the trading view) refreshes board prices every
- * 15s, while per-symbol 24h stats and chart series are cached locally so a
- * symbol switch feels instant and never triggers a stampede of requests.
+ * GET /market/board -> {symbols, quotes:{price,buy,sell}, source, updatedAt,
+ * stale}. The store flattens quotes into prices/buys/sells so BoardView,
+ * TradingView and WalletView keep working unchanged.
  */
 export const useMarketStore = defineStore('market', () => {
   const symbols = ref([])
@@ -102,72 +101,60 @@ export const useMarketStore = defineStore('market', () => {
   }
 
   /**
-   * Pull the market once. `record` asks the server to store the sample, which is
-   * how the chart accumulates real history over time.
+   * Pull the NestJS board once. Charts are synthetic (no candle store yet):
+   * keep `candles`/`ticks` empty and derive header stats from the mid price.
    */
   async function fetchMarket({ withChart = true, record = false } = {}) {
-    loading.value = true
-    error.value = ''
+    loading.value = true;
+    error.value = '';
     try {
-      const params = new URLSearchParams()
-      if (withChart) params.set('symbol', symbol.value)
-      if (withChart) params.set('range', range.value)
-      if (record) params.set('record', '1')
-
-      const data = await api.get(`/api/trade/market?${params.toString()}`)
-
-      symbols.value = data.symbols ?? []
-      trackDirection(data.prices ?? {})
-      prices.value = data.prices ?? {}
-      buys.value = data.buys ?? {}
-      sells.value = data.sells ?? {}
-      source.value = data.source ?? ''
-      sourceTitle.value = data.sourceTitle ?? ''
-      updatedAt.value = data.updatedAt ?? Date.now()
-      stale.value = Boolean(data.stale)
-      note.value = data.note ?? ''
-      if (data.stats && typeof data.stats === 'object') {
-        stats.value = { ...stats.value, ...data.stats }
+      const data = await api.get('/market/board');
+      symbols.value = Array.isArray(data.symbols) ? data.symbols : [];
+      const quotes = data.quotes ?? {};
+      const nextPrices = {};
+      const nextBuys = {};
+      const nextSells = {};
+      for (const [key, q] of Object.entries(quotes)) {
+        if (!q || typeof q.price !== 'number') continue;
+        nextPrices[key] = q.price;
+        if (typeof q.buy === 'number') nextBuys[key] = q.buy;
+        if (typeof q.sell === 'number') nextSells[key] = q.sell;
       }
-      if (Array.isArray(data.ranges) && data.ranges.length) ranges.value = data.ranges
-
+      trackDirection(nextPrices);
+      prices.value = nextPrices;
+      buys.value = nextBuys;
+      sells.value = nextSells;
+      source.value = data.source ?? '';
+      sourceTitle.value = data.sourceTitle ?? data.source ?? '';
+      updatedAt.value = data.updatedAt ?? Date.now();
+      stale.value = Boolean(data.stale);
+      note.value = data.note ?? '';
       if (withChart) {
-        candles.value = data.candles ?? []
-        ticks.value = data.ticks ?? []
+        candles.value = [];
+        ticks.value = [];
       }
     } catch (e) {
-      error.value = e.message || 'دریافت قیمت‌ها ناموفق بود'
+      error.value = e.message || 'دریافت قیمت‌ها ناموفق بود';
     } finally {
-      loading.value = false
+      loading.value = false;
     }
   }
 
-  /**
-   * 24h stats for every symbol in ONE request — powers the market dropdown so it
-   * shows real change/high/low instead of per-symbol guesses.
-   */
+  /** No NestJS stats endpoint yet — keep cached values only. */
   async function fetchStats() {
-    try {
-      const data = await api.get('/api/trade/market?statsOnly=1')
-      if (data.stats && typeof data.stats === 'object') {
-        stats.value = { ...stats.value, ...data.stats }
-      }
-    } catch {
-      /* non-fatal — the header simply keeps its fallback values */
-    }
+    return stats.value;
   }
 
   /** Auto-refresh loop — the whole point of a live board. */
   function startPolling(intervalMs = 15000) {
-    if (polling.value) return
-    polling.value = true
-    stopPolling()
+    if (polling.value) return;
+    polling.value = true;
+    stopPolling();
     pollTimer.value = setInterval(() => {
       if (document.visibilityState === 'visible') {
-        // Record every poll so history stays dense; the server throttles anyway.
-        void fetchMarket({ record: true })
+        void fetchMarket({ withChart: false });
       }
-    }, intervalMs)
+    }, intervalMs);
   }
 
   function stopPolling() {
@@ -176,13 +163,13 @@ export const useMarketStore = defineStore('market', () => {
   }
 
   async function setSymbol(next) {
-    symbol.value = next
-    await fetchMarket({ record: true })
+    symbol.value = next;
+    await fetchMarket({ withChart: false });
   }
 
   async function setRange(next) {
-    range.value = next
-    await fetchMarket({ record: false })
+    range.value = next;
+    await fetchMarket({ withChart: false });
   }
 
   return {

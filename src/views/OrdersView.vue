@@ -74,7 +74,7 @@
           </header>
 
           <!-- Progress rail: 4 stages, cancelled collapses to nothing -->
-          <div v-if="o.status !== 'CANCELLED'" class="rail">
+          <div v-if="o.status !== 'REJECTED'" class="rail">
             <div class="rail__track"><span class="rail__fill" :style="{ width: pct(statusStep(o.status)) }"></span></div>
             <div class="rail__labels">
               <span v-for="(s, i) in stages" :key="s" :class="{ 'is-on': stepIndex(o.status) >= i }">
@@ -96,16 +96,6 @@
               <small>جمع کل</small>
               <strong>{{ faMoney(o.totalAmount) }}</strong>
             </div>
-            <button
-              v-if="o.status === 'PENDING'"
-              type="button"
-              class="btn btn--ghost btn--danger"
-              :disabled="busy === o.id"
-              @click="cancel(o)"
-            >
-              <span class="material-icons">{{ busy === o.id ? 'autorenew' : 'cancel' }}</span>
-              {{ busy === o.id ? 'در حال لغو…' : 'لغو سفارش' }}
-            </button>
           </footer>
 
           <p v-if="o.note" class="order__note">
@@ -121,29 +111,26 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import { useWholesaleStore } from '../stores/wholesale'
 import { toFa, faMoney, faWeight, faJalaliDate, faStatus, statusTone, statusIcon, statusStep, faOrderCode } from '../utils/format'
 
 const router = useRouter()
 const auth = useAuthStore()
-const store = useWholesaleStore()
 
-const loading = computed(() => store.loadingOrders)
-const error = computed(() => store.error)
-const orders = computed(() => store.orders)
+const loading = computed(() => auth.loading)
+const error = computed(() => auth.error)
+const orders = computed(() => auth.orders ?? [])
 
 const active = ref('ALL')
-const busy = ref('')
 
-const stages = ['PENDING', 'CONFIRMED', 'PREPARING', 'DELIVERED']
+const stages = ['MANUAL', 'AWAITING_RECEIPT', 'APPROVED', 'FULFILLED']
 
 const filters = [
   { value: 'ALL', label: 'همه' },
-  { value: 'PENDING', label: 'در انتظار' },
-  { value: 'CONFIRMED', label: 'تأیید شده' },
-  { value: 'PREPARING', label: 'آماده‌سازی' },
-  { value: 'DELIVERED', label: 'تحویل شده' },
-  { value: 'CANCELLED', label: 'لغو شده' }
+  { value: 'MANUAL', label: 'ثبت دستی' },
+  { value: 'AWAITING_RECEIPT', label: 'در انتظار رسید' },
+  { value: 'APPROVED', label: 'تأیید شده' },
+  { value: 'FULFILLED', label: 'انجام شده' },
+  { value: 'REJECTED', label: 'رد شده' }
 ]
 
 const visible = computed(() =>
@@ -164,20 +151,10 @@ function stepIndex(status) {
 }
 
 async function refresh() {
-  await store.fetchOrders()
-}
-
-async function cancel(order) {
-  busy.value = order.id
-  const okDone = await store.cancelOrder(order.id)
-  busy.value = ''
-  if (okDone) {
-    // Re-fetch so the rail and badge reflect the new state immediately.
-    await store.fetchOrders()
-  }
+  await auth.fetchOrders()
 }
 
 onMounted(() => {
-  if (auth.isAuthenticated) store.fetchOrders()
+  if (auth.isAuthenticated) auth.fetchOrders()
 })
 </script>

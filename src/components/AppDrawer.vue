@@ -45,6 +45,9 @@
           <button type="button" class="drawer__item" @click="go('/account')">
             <i class="material-icons">account_balance_wallet</i> مانده حساب
           </button>
+          <button type="button" class="drawer__item" @click="go('/wallet')">
+            <i class="material-icons">savings</i> کیف پول
+          </button>
           <button type="button" class="drawer__item" @click="go('/settings')">
             <i class="material-icons">settings</i> تنظیمات
           </button>

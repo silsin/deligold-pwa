@@ -41,20 +41,34 @@
       </template>
 
       <template v-else>
+        <div class="filters" role="tablist" style="display:flex;gap:6px;margin-bottom:12px">
+          <button type="button" class="chip" :class="{ 'chip--on': mode === 'login' }" @click="mode = 'login'">ورود</button>
+          <button type="button" class="chip" :class="{ 'chip--on': mode === 'register' }" @click="mode = 'register'">ثبت‌نام</button>
+        </div>
         <form class="form" @submit.prevent="submit">
           <label class="form__field">
-            <span>شماره موبایل یا ایمیل</span>
-            <input v-model="identifier" type="text" inputmode="email" autocomplete="username" placeholder="۰۹۱۲۳۴۵۶۷۸۹" />
+            <span>شماره موبایل</span>
+            <input v-model="phone" type="text" inputmode="tel" autocomplete="username" placeholder="۰۹۱۲۳۴۵۶۷۸۹" />
           </label>
           <label class="form__field">
             <span>رمز عبور</span>
             <input v-model="password" type="password" autocomplete="current-password" placeholder="••••••" />
           </label>
+          <template v-if="mode === 'register'">
+            <label class="form__field">
+              <span>نام</span>
+              <input v-model="name" type="text" autocomplete="name" placeholder="نام و نام خانوادگی" />
+            </label>
+            <label class="form__field">
+              <span>کد ملی (اختیاری)</span>
+              <input v-model="nationalId" type="text" inputmode="numeric" placeholder="۰۰۱۲۳۴۵۶۷۸" />
+            </label>
+          </template>
 
           <p v-if="auth.error" class="form__error">{{ auth.error }}</p>
 
           <button type="submit" class="btn btn--primary btn--block" :disabled="auth.loading">
-            {{ auth.loading ? 'در حال ورود…' : 'ورود' }}
+            {{ auth.loading ? (mode === 'register' ? 'در حال ثبت‌نام…' : 'در حال ورود…') : (mode === 'register' ? 'ثبت‌نام' : 'ورود') }}
           </button>
         </form>
         <p class="form__hint">
@@ -74,15 +88,20 @@ import { faMoney } from '../utils/format'
 const auth = useAuthStore()
 const router = useRouter()
 
-const identifier = ref('')
+const mode = ref('login')
+const phone = ref('')
 const password = ref('')
+const name = ref('')
+const nationalId = ref('')
 const amount = ref('1000000')
 const depositing = ref(false)
 const depositMsg = ref('')
 const depositOk = ref(false)
 
 async function submit() {
-  const ok = await auth.login(identifier.value.trim(), password.value)
+  const ok = mode.value === 'register'
+    ? await auth.register(phone.value.trim(), password.value, name.value.trim(), nationalId.value.trim())
+    : await auth.login(phone.value.trim(), password.value)
   if (ok) {
     password.value = ''
     router.push('/')

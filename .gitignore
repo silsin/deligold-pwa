@@ -1,0 +1,28 @@
+# ── Build output ──────────────────────────────────────────────────────────────
+dist
+
+# ── Dependencies ──────────────────────────────────────────────────────────────
+node_modules
+
+# ── Local env & secrets (never bake these into an image) ──────────────────────
+# Note: .env is NOT read by the Docker build or by docker compose's container
+# env — compose only reads it for *interpolation* (${...}) in the YAML. Real
+# runtime config comes from `docker compose` variables or `docker run -e`.
+.env
+.env.local
+.env.*.local
+
+# ── Logs / scratch ────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+build-out.txt
+build-err.txt
+pwa-dev-out.txt
+pwa-dev-err.txt
+
+# ── Editors & OS ──────────────────────────────────────────────────────────────
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+Thumbs.db

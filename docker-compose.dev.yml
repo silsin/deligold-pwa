@@ -1,0 +1,37 @@
+###############################################################################
+# delly-pwa — dev compose (Vite dev server, hot reload)
+#
+#   docker compose -f docker-compose.dev.yml up
+#
+# For local development only. `npm run dev` is used instead of the production
+# image so HMR works, and the working tree is bind-mounted (not baked in), so
+# edits appear instantly. node_modules stays inside the container: esbuild and
+# its platform-specific binaries must not be shared with a Windows host, which
+# would otherwise break the build.
+###############################################################################
+
+services:
+  delly-pwa-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    image: delly-pwa:dev
+    container_name: delly-pwa-dev
+    ports:
+      - "${DEV_PORT:-9741}:9741"
+    environment:
+      # The NestJS delly-api the dev server proxies its routes to.
+      #   Linux:   http://172.17.0.1:7456  (docker bridge)
+      #   Desktop: http://host.docker.internal:7456
+      DG_API_TARGET: ${DG_API_TARGET:-http://host.docker.internal:7456}
+    volumes:
+      # Source in, node_modules deliberately out (anonymous volume above).
+      - ./index.html:/app/index.html:cached
+      - ./vite.config.js:/app/vite.config.js:cached
+      - ./public:/app/public:cached
+      - ./src:/app/src:cached
+      - dev_node_modules:/app/node_modules
+    restart: unless-stopped
+
+volumes:
+  dev_node_modules:

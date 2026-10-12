@@ -23,7 +23,36 @@
           <strong class="profile__name">{{ displayName }}</strong>
           <small class="profile__id">{{ displayId }}</small>
         </div>
-        <span class="profile__live">فعال</span>
+        <span v-if="auth.isVerified" class="profile__live">تأیید شده</span>
+        <span v-else class="profile__live is-unverified">تأیید نشده</span>
+      </section>
+
+      <p v-if="verifyNote" class="msg msg--err">{{ verifyNote }}</p>
+
+      <section v-if="missingFields.length" class="pane pay">
+        <h2 class="section-title">تکمیل پروفایل</h2>
+        <ul class="entries">
+          <li v-for="f in missingFields" :key="f" class="entry">
+            <div class="entry__icon is-debit"><span class="material-icons">info</span></div>
+            <div class="entry__body"><div class="entry__title">{{ missingLabel(f) }}</div></div>
+          </li>
+        </ul>
+      </section>
+
+      <section class="pane pay">
+        <h2 class="section-title">ویرایش پروفایل</h2>
+        <label class="pay__label" for="pf-name">نام</label>
+        <input id="pf-name" v-model="form.name" type="text" class="pay__input tnum" />
+        <label class="pay__label" for="pf-national">کد ملی</label>
+        <input id="pf-national" v-model="form.nationalId" type="text" inputmode="numeric" class="pay__input tnum" />
+        <label class="pay__label" for="pf-address">آدرس</label>
+        <input id="pf-address" v-model="form.address" type="text" class="pay__input tnum" />
+        <p v-if="saveError" class="msg msg--err">{{ saveError }}</p>
+        <p v-if="saveOk" class="msg msg--ok">پروفایل با موفقیت ذخیره شد.</p>
+        <button type="button" class="btn btn--primary btn--block" :disabled="saving" @click="submitProfile">
+          <span class="material-icons">{{ saving ? 'autorenew' : 'save' }}</span>
+          {{ saving ? 'در حال ذخیره…' : 'ذخیره پروفایل' }}
+        </button>
       </section>
 
       <section class="debt" :class="{ 'is-clear': debt <= 0 }">
@@ -94,15 +123,13 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import { useWholesaleStore } from '../stores/wholesale'
 import { faAgo, faCompact, faMoney, toFa } from '../utils/format'
 
 const router = useRouter()
 const auth = useAuthStore()
-const store = useWholesaleStore()
 
 const busy = ref(false)
 const paying = ref(false)
@@ -111,6 +138,47 @@ const payOk = ref(false)
 const payAmount = ref(0)
 const payText = ref('')
 const active = ref('ALL')
+const saving = ref(false)
+const saveError = ref('')
+const saveOk = ref(false)
+const form = reactive({ name: '', nationalId: '', address: '' })
+
+watch(() => auth.user, (u) => {
+  if (!u) return
+  form.name = u.name ?? ''
+  form.nationalId = u.nationalId ?? ''
+  form.address = u.address ?? ''
+}, { immediate: true })
+
+const profileCheck = computed(() => auth.profileCheck ?? {})
+const missingFields = computed(() => {
+  const m = profileCheck.value.missing
+  if (Array.isArray(m) && m.length) return m
+  const out = []
+  if (!auth.user?.name) out.push('name')
+  if (!auth.user?.nationalId) out.push('nationalId')
+  if (!auth.user?.address) out.push('address')
+  return out
+})
+const verifyNote = computed(() => {
+  if (auth.isVerified) return ''
+  return profileCheck.value.note || profileCheck.value.message || 'حساب شما هنوز تأیید نشده است.'
+})
+function missingLabel(f) {
+  if (f === 'name') return 'نام'
+  if (f === 'nationalId') return 'کد ملی'
+  if (f === 'address') return 'آدرس'
+  return f
+}
+async function submitProfile() {
+  saving.value = true
+  saveError.value = ''
+  saveOk.value = false
+  const res = await auth.updateProfile({ name: form.name, nationalId: form.nationalId, address: form.address })
+  saving.value = false
+  if (res?.ok) saveOk.value = true
+  else saveError.value = res?.error || auth.error || 'به‌روزرسانی پروفایل ناموفق بود'
+}
 
 const filters = [
   { value: 'ALL', label: 'همه' },
@@ -118,9 +186,9 @@ const filters = [
   { value: 'PAY', label: 'پرداخت' }
 ]
 
-const entries = computed(() => store.ledger ?? store.entries ?? [])
-const debt = computed(() => store.debt ?? 0)
-const orderCount = computed(() => store.orders?.length ?? 0)
+const entries = computed(() => auth.transactions ?? [])
+const debt = computed(() => 0)
+const orderCount = computed(() => auth.orders?.length ?? 0)
 
 function isPayment(e) { return String(e?.kind ?? '').toUpperCase().includes('PAY') }
 
@@ -158,15 +226,15 @@ async function submitPay() {
   paying.value = true
   payError.value = ''
   payOk.value = false
-  const ok = await store.payDebt(Number(payAmount.value))
+  const res = await auth.requestWithdrawal(Number(payAmount.value), 'برداشت وجه', 'پرداخت بدهی از حساب')
   paying.value = false
-  if (ok) {
+  if (res?.ok) {
     payOk.value = true
     payAmount.value = 0
     payText.value = ''
     await refresh(false)
   } else {
-    payError.value = store.error || 'ثبت پرداخت ناموفق بود'
+    payError.value = res?.error || auth.error || 'ثبت پرداخت ناموفق بود'
   }
 }
 function entryClass(e) { return isPayment(e) ? 'is-pay' : 'is-debit' }
@@ -183,7 +251,7 @@ function kindLabel(e) {
 async function refresh(withSpinner = true) {
   if (!auth.isLoggedIn) return
   if (withSpinner) busy.value = true
-  try { await Promise.all([store.fetchLedger(), store.fetchOrders(), auth.fetchAccount()]) }
+  try { await Promise.all([auth.fetchProfile(), auth.fetchWallet(), auth.fetchOrders()]) }
   finally { if (withSpinner) busy.value = false }
 }
 function logout() { auth.logout(); router.push('/login') }

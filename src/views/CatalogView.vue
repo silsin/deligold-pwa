@@ -1,20 +1,19 @@
 <template>
   <div class="page">
     <!-- Live price source: the goldsmith must trust the number before ordering. -->
-    <header class="src" :class="{ 'is-stale': w.stale }">
-      <span class="material-icons src__icon">{{ w.stale ? 'cloud_off' : 'bolt' }}</span>
+    <header class="src">
+      <span class="material-icons src__icon">store</span>
       <div class="src__text">
-        <strong>{{ w.sourceTitle || 'در حال دریافت قیمت…' }}</strong>
-        <small v-if="w.updatedAt">
-          آخرین بروزرسانی: {{ faAgo(w.updatedAt) }} · {{ faTime(w.updatedAt) }}
+        <strong>فروشگاه‌ها</strong>
+        <small v-if="w.stores.length">
+          {{ faNumber(w.stores.length) }} فروشگاه
         </small>
       </div>
-      <button class="src__refresh" :disabled="w.loadingCatalog" @click="w.fetchCatalog()">
+      <button class="src__refresh" :disabled="w.loading" @click="w.fetchStores()">
         <span class="material-icons">refresh</span>
       </button>
     </header>
 
-    <p v-if="w.note" class="warn">{{ w.note }}</p>
     <p v-if="w.error" class="warn">{{ w.error }}</p>
 
     <!-- Search + category filter -->
@@ -36,186 +35,76 @@
       </div>
     </div>
 
-    <p v-if="w.loadingCatalog && !w.items.length" class="muted">در حال دریافت کاتالوگ…</p>
-    <p v-else-if="!visible.length" class="muted">کالایی با این جستجو پیدا نشد.</p>
+    <p v-if="w.loading && !w.stores.length" class="muted">در حال دریافت فروشگاه‌ها…</p>
+    <p v-else-if="!visible.length" class="muted">فروشگاهی با این جستجو پیدا نشد.</p>
 
     <ul v-else class="list">
       <li v-for="it in visible" :key="it.id" class="card">
         <div class="card__head">
           <div class="card__title">
             <h3>{{ it.name }}</h3>
-            <span class="card__cat">{{ it.category }}</span>
+            <span class="card__cat">{{ it.city || it.type || it.code }}</span>
           </div>
-          <span v-if="it.stockNote" class="card__stock">{{ it.stockNote }}</span>
+          <span v-if="it.balance != null" class="card__stock">{{ faMoney(it.balance) }}</span>
         </div>
 
-        <div class="card__prices">
-          <div class="priceBox">
-            <span class="priceBox__label">قیمت واحد</span>
-            <span class="priceBox__value bd">{{ faMoney(it.unitPrice) }}</span>
-            <span class="priceBox__unit">هر {{ it.unit }}</span>
-          </div>
-          <div class="priceBox priceBox--muted">
-            <span class="priceBox__label">پایه لحظه‌ای</span>
-            <span class="priceBox__value bd">{{ faMoney(it.basePrice) }}</span>
-            <span class="priceBox__unit">
-              {{ it.priceMode === 'perGram' ? `${faWeight(it.gramsPerUnit)} گرم در ${it.unit}` : it.symbol }}
-            </span>
-          </div>
-          <span v-if="it.gapPercent" class="gap">+{{ faPercent(it.gapPercent, 1) }}</span>
-        </div>
+        <button class="btn btn--ghost" @click="selectStore(it.id)">مشاهده گردش</button>
 
-        <!-- Quantity stepper: min/max come from the supplier's catalog entry. -->
-        <div class="stepper">
-          <button class="stepper__btn" @click="w.bump(it.id, -1, it.minQty || 1, it.maxQty || 999)">
-            <span class="material-icons">remove</span>
-          </button>
-          <div class="stepper__field">
-            <input
-              :value="w.qtyOf(it.id) || ''"
-              type="number"
-              inputmode="numeric"
-              min="0"
-              :max="it.maxQty || 999"
-              :placeholder="String(it.minQty || 1)"
-              @input="onQty(it, $event)"
-            />
-            <span class="stepper__unit">{{ it.unit }}</span>
-          </div>
-          <button class="stepper__btn" @click="w.bump(it.id, 1, it.minQty || 1, it.maxQty || 999)">
-            <span class="material-icons">add</span>
-          </button>
-          <span class="stepper__total bd">
-            {{ faMoney((it.unitPrice || 0) * (w.qtyOf(it.id) || 0)) }}
-          </span>
-        </div>
-
-        <p v-if="it.minQty > 1" class="minNote">حداقل سفارش {{ faNumber(it.minQty) }} {{ it.unit }}</p>
-      </li>
-    </ul>
-
-    <!-- Basket (sticky bottom bar) -->
-    <div v-if="w.basketCount" class="basket">
-      <div class="basket__info">
-        <strong>{{ faNumber(w.basketCount) }} قلم · {{ faNumber(w.basketQty) }} واحد</strong>
-        <span class="basket__total bd">{{ faMoney(w.basketTotal) }}</span>
-      </div>
-      <div class="basket__actions">
-        <button class="btn btn--ghost" @click="w.clearBasket()">خالی کردن</button>
-        <button class="btn btn--primary" :disabled="w.submitting" @click="showReview = true">
-          <span v-if="!w.submitting">ثبت سفارش</span>
-          <span v-else>در حال ارسال…</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Review sheet: confirm the locked prices before the order is created. -->
-    <div v-if="showReview" class="sheet" @click.self="showReview = false">
-      <div class="sheet__panel">
-        <div class="sheet__head">
-          <h2>بازبینی سفارش</h2>
-          <button class="sheet__close" @click="showReview = false">
-            <span class="material-icons">close</span>
-          </button>
-        </div>
-
-        <ul class="review">
-          <li v-for="l in w.basketLines" :key="l.item.id" class="review__row">
-            <div class="review__name">
-              <strong>{{ l.item.name }}</strong>
-              <small>{{ faNumber(l.qty) }} {{ l.item.unit }}</small>
-            </div>
-            <span class="review__total bd">{{ faMoney(l.lineTotal) }}</span>
+        <ul v-if="selectedId === it.id" class="list">
+          <li v-for="m in movements" :key="m.id || m.createdAt" class="card">
+            <span class="card__cat">{{ m.kind || m.type }} · {{ faNumber(m.amount) }}</span>
+            <small v-if="m.createdAt">{{ faAgo(m.createdAt) }} · {{ faTime(m.createdAt) }}</small>
           </li>
         </ul>
-
-        <label class="note">
-          <span>توضیح برای تأمین‌کننده (اختیاری)</span>
-          <input v-model="orderNote" type="text" placeholder="مثلاً: تحویل فردا صبح" />
-        </label>
-
-        <div class="sum">
-          <span>جمع کل</span>
-          <strong class="bd">{{ faMoney(w.basketTotal) }}</strong>
-        </div>
-
-        <p v-if="!auth.isAuthenticated" class="warn">برای ثبت سفارش باید وارد شوید.</p>
-
-        <button
-          class="btn btn--primary btn--block"
-          :disabled="w.submitting || !auth.isAuthenticated"
-          @click="submitOrder"
-        >
-          <span v-if="!w.submitting">تأیید و ثبت سفارش</span>
-          <span v-else>در حال ارسال…</span>
-        </button>
-      </div>
-    </div>
+      </li>
+    </ul>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { useWholesaleStore } from '../stores/wholesale'
+import { useStoresStore } from '../stores/wholesale'
 import { useAuthStore } from '../stores/auth'
 import {
-  faMoney, faAgo, faTime, faPercent, faWeight, faNumber
+  faMoney, faAgo, faTime, faNumber
 } from '../utils/format'
 
-const w = useWholesaleStore()
+const w = useStoresStore()
 const auth = useAuthStore()
 
 const query = ref('')
 const activeCat = ref('')
-const showReview = ref(false)
-const orderNote = ref('')
-const justOrdered = ref(null)
+const selectedId = ref('')
 
-/** Category chips come from the catalog itself — no hard-coded list to drift. */
+/** Category chips come from the stores themselves — no hard-coded list to drift. */
 const categories = computed(() => {
-  const set = new Set(w.items.map(it => it.category).filter(Boolean))
+  const set = new Set(w.stores.map(it => it.city || it.type || it.category).filter(Boolean))
   return ['', ...set]
 })
 
 const visible = computed(() => {
   const q = query.value.trim().toLowerCase()
-  return w.items.filter(it => {
-    if (activeCat.value && it.category !== activeCat.value) return false
+  return w.stores.filter(it => {
+    const cat = it.city || it.type || it.category || ''
+    if (activeCat.value && cat !== activeCat.value) return false
     if (!q) return true
     return (
       it.name?.toLowerCase().includes(q) ||
-      it.category?.toLowerCase().includes(q) ||
-      it.symbol?.toLowerCase().includes(q)
+      cat?.toLowerCase().includes(q) ||
+      it.code?.toLowerCase().includes(q)
     )
   })
 })
 
-/**
- * Typed input, clamped to the supplier's min/max. Empty field is allowed while
- * the user is typing (the store drops it), so they can clear and retype.
- */
-function onQty(item, event) {
-  const raw = event.target.value
-  if (raw === '') {
-    w.removeLine(item.id)
-    return
-  }
-  const min = item.minQty || 1
-  const max = item.maxQty || 9999
-  w.setQty(item.id, Math.min(max, Math.max(0, Math.round(Number(raw) || 0))))
-}
+const movements = computed(() => (selectedId.value ? (w.movementsByStore[selectedId.value] ?? []) : []))
 
-async function submitOrder() {
-  const order = await w.submit(orderNote.value.trim())
-  if (order) {
-    orderNote.value = ''
-    showReview.value = false
-    justOrdered.value = order
-  }
+function selectStore(id) {
+  selectedId.value = id
+  w.fetchMovements(id)
 }
 
 onMounted(() => {
-  w.loadEverything()
+  w.fetchStores()
 })
 </script>
 

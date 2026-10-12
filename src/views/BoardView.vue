@@ -170,7 +170,7 @@ const heroSpark = computed(() => market.stats[heroSymbol.value]?.spark ?? [])
 
 /**
  * Buy = what the customer pays (base + fee), Sell = what they receive
- * (base − fee) — matches how /api/trade/order actually settles.
+ * (base − fee) — matches how /trade/orders actually settles.
  */
 function buyPrice(symbol) {
   const q = market.buys[symbol]

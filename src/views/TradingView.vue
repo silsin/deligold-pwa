@@ -149,8 +149,29 @@
           <b>{{ faMoney(netTotal) }}</b>
         </div>
 
+        <div v-if="side === 'BUY' && !auth.isVerified" class="of__row">
+          <span>نحوه تحویل</span>
+          <b>
+            <label style="margin-inline-end: 12px"><input v-model="fulfillment" type="radio" value="PICKUP" /> حضوری</label>
+            <label><input v-model="fulfillment" type="radio" value="DELIVERY" /> پستی</label>
+          </b>
+        </div>
+        <label v-if="side === 'BUY' && !auth.isVerified && fulfillment === 'DELIVERY'" class="of__field">
+          <span>آدرس تحویل</span>
+          <div class="of__input"><input v-model="deliveryAddress" placeholder="آدرس کامل پستی" /></div>
+        </label>
+
         <p v-if="orderError" class="of__msg is-err">{{ orderError }}</p>
         <p v-if="orderSuccess" class="of__msg is-ok">{{ orderSuccess }}</p>
+
+        <div v-if="pendingReceipt" class="of__field">
+          <span>رسید بانکی سفارش {{ pendingReceipt.ref }} ({{ pendingReceipt.status }})</span>
+          <div class="of__input"><input type="file" accept="image/*,.pdf" @change="onReceiptFile" /></div>
+          <div class="of__input" style="margin-top: 6px"><input v-model="receiptNote" placeholder="توضیح رسید (اختیاری)" /></div>
+          <button type="button" class="of__submit is-buy" :disabled="receiptBusy" style="margin-top: 8px" @click="submitReceiptForm">
+            <span class="of__submit-in"><span>{{ receiptBusy ? 'در حال ارسال…' : 'ارسال رسید' }}</span></span>
+          </button>
+        </div>
 
         <button
           type="button"
@@ -252,6 +273,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMarketStore } from '../stores/market'
 import { useAuthStore } from '../stores/auth'
+import { api } from '../utils/api.js'
 import PriceChart from '../components/PriceChart.vue'
 import OrderBook from '../components/OrderBook.vue'
 import MarketSheet from '../components/MarketSheet.vue'
@@ -268,6 +290,13 @@ const pcts = [0, 25, 50, 75, 100]
 const submitting = ref(false)
 const orderError = ref('')
 const orderSuccess = ref('')
+// Manual (receipt) flow: unverified buys land in AWAITING_RECEIPT.
+const pendingReceipt = ref(null)
+const receiptFile = ref(null)
+const receiptNote = ref('')
+const fulfillment = ref('PICKUP')
+const deliveryAddress = ref('')
+const receiptBusy = ref(false)
 const sheetOpen = ref(false)
 const pickedPrice = ref(null)
 const mode = ref(localStorage.getItem('dg_trade_chart_mode') || 'candle')
@@ -331,35 +360,118 @@ function applyPercent() {
   }
 }
 
+function needsReceipt(order) {
+  return order && (order.kind === 'MANUAL' || order.status === 'AWAITING_RECEIPT')
+}
+
 async function submit() {
   orderError.value = ''
   orderSuccess.value = ''
+  pendingReceipt.value = null
   if (!auth.isLoggedIn) {
     orderError.value = 'برای معامله ابتدا وارد حساب شوید'
     return
   }
+  if (side.value === 'BUY' && !auth.isVerified) {
+    if (!fulfillment.value) fulfillment.value = 'PICKUP'
+    if (fulfillment.value === 'DELIVERY' && !deliveryAddress.value.trim()) {
+      orderError.value = 'برای ارسال پستی، آدرس تحویل الزامی است'
+      return
+    }
+  }
   submitting.value = true
   try {
-    const result = await auth.placeOrder({
-      symbol: market.symbol,
-      side: side.value,
-      grams: grams.value
-    })
-    if (result.ok) {
+    const payload = { symbol: market.symbol, side: side.value, grams: grams.value }
+    // Unverified buys go through the receipt flow with a fulfillment choice.
+    if (side.value === 'BUY' && !auth.isVerified) {
+      payload.fulfillment = fulfillment.value
+      if (fulfillment.value === 'DELIVERY') payload.deliveryAddress = deliveryAddress.value.trim()
+    }
+    const result = await auth.placeOrder(payload)
+    if (!result.ok) {
+      orderError.value = result.error || 'ثبت سفارش ناموفق بود'
+      return
+    }
+    const order = result.order
+    if (needsReceipt(order)) {
+      pendingReceipt.value = order
+      orderSuccess.value = `سفارش ${order.ref ?? ''} ثبت شد — رسید بانکی را بارگذاری کنید تا بررسی شود`
+    } else {
       orderSuccess.value =
         side.value === 'BUY'
-          ? `خرید ${faWeight(grams.value)} ${market.meta?.unit ?? 'گرم'} با قیمت ${faMoney(execPrice.value)} ثبت شد`
-          : `فروش ${faWeight(grams.value)} ${market.meta?.unit ?? 'گرم'} با قیمت ${faMoney(execPrice.value)} ثبت شد`
+          ? `خرید ${faWeight(grams.value)} ${market.meta?.unit ?? 'گرم'} با قیمت ${faMoney(order?.price ?? execPrice.value)} ثبت شد`
+          : `فروش ${faWeight(grams.value)} ${market.meta?.unit ?? 'گرم'} با قیمت ${faMoney(order?.price ?? execPrice.value)} ثبت شد`
+      if (order) {
+        orderSuccess.value += ` (کارمزد ${faMoney(order.fee ?? 0)} · مبلغ ${faMoney(order.amount ?? 0)} · ${order.ref ?? ''})`
+      }
       amount.value = ''
       percent.value = 0
-      await auth.fetchAccount()
-    } else {
-      orderError.value = result.error
     }
+    await auth.fetchAccount()
   } catch (e) {
     orderError.value = e.message || 'ثبت سفارش ناموفق بود'
   } finally {
     submitting.value = false
+  }
+}
+
+function onReceiptFile(e) {
+  receiptFile.value = e?.target?.files?.[0] ?? null
+}
+
+async function submitReceiptForm() {
+  orderError.value = ''
+  orderSuccess.value = ''
+  const order = pendingReceipt.value
+  if (!order?.id) {
+    orderError.value = 'سفارشی برای ارسال رسید انتخاب نشده است'
+    return
+  }
+  if (!receiptFile.value) {
+    orderError.value = 'فایل رسید را انتخاب کنید'
+    return
+  }
+  if (fulfillment.value === 'DELIVERY' && !deliveryAddress.value.trim()) {
+    orderError.value = 'برای ارسال پستی، آدرس تحویل الزامی است'
+    return
+  }
+  receiptBusy.value = true
+  try {
+    const form = new FormData()
+    form.append('file', receiptFile.value)
+    let receiptPath = ''
+    try {
+      const up = await api.post('/uploads', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+      receiptPath = up?.path ?? up?.url ?? up?.filePath ?? up?.file?.path ?? ''
+    } catch (e) {
+      orderError.value = e.message || 'بارگذاری رسید ناموفق بود'
+      return
+    }
+    if (!receiptPath) {
+      orderError.value = 'بارگذاری رسید ناموفق بود'
+      return
+    }
+    const payload = {
+      receiptPath,
+      receiptNote: receiptNote.value.trim(),
+      fulfillment: fulfillment.value,
+    }
+    if (fulfillment.value === 'DELIVERY') payload.deliveryAddress = deliveryAddress.value.trim()
+    const result = await auth.submitReceipt(order.id, payload)
+    if (!result.ok) {
+      orderError.value = result.error || 'ارسال رسید ناموفق بود'
+      return
+    }
+    const updated = result.order ?? null
+    orderSuccess.value = `رسید سفارش ${updated?.ref ?? order.ref ?? ''} ارسال شد و در صف بررسی قرار گرفت`
+    pendingReceipt.value = null
+    receiptFile.value = null
+    receiptNote.value = ''
+    await auth.fetchAccount()
+  } catch (e) {
+    orderError.value = e.message || 'ارسال رسید ناموفق بود'
+  } finally {
+    receiptBusy.value = false
   }
 }
 

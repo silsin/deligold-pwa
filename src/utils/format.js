@@ -78,7 +78,12 @@ const STATUS_LABELS = {
   CONFIRMED: 'تأیید شد',
   PREPARING: 'در حال آماده‌سازی',
   DELIVERED: 'تحویل شد',
-  CANCELLED: 'لغو شد'
+  CANCELLED: 'لغو شد',
+  MANUAL: 'ثبت دستی',
+  AWAITING_RECEIPT: 'در انتظار رسید',
+  APPROVED: 'تأیید شده',
+  FULFILLED: 'انجام شده',
+  REJECTED: 'رد شده'
 }
 
 /** Each status maps to a colour class the views can style. */
@@ -87,7 +92,12 @@ const STATUS_KIND = {
   CONFIRMED: 'info',
   PREPARING: 'info',
   DELIVERED: 'ok',
-  CANCELLED: 'bad'
+  CANCELLED: 'bad',
+  MANUAL: 'warn',
+  AWAITING_RECEIPT: 'warn',
+  APPROVED: 'info',
+  FULFILLED: 'ok',
+  REJECTED: 'bad'
 }
 
 export function statusLabel(status) {
@@ -113,6 +123,46 @@ export function ledgerKindLabel(kind) {
 /** Order code shown to the customer: «#۱۲۳۴». */
 export function orderCode(code) {
   return `#${toFa(code)}`
+}
+
+// ── Wallet statement (گردش حساب) ─────────────────────────────────────────────
+
+/**
+ * Wallet transaction kinds → Persian label + Material icon + colour tone.
+ * `tone` drives the sign styling: `in`/`out` for cash that moved, `swap` for a
+ * gold→gold conversion (no cash), and `fee` for commission (reference only —
+ * it is already inside the amounts of the legs around it).
+ */
+export const TX_KIND = {
+  DEPOSIT: { label: 'واریز', icon: 'south_west', tone: 'in' },
+  WITHDRAW: { label: 'برداشت', icon: 'north_east', tone: 'out' },
+  BUY: { label: 'خرید طلا', icon: 'add_circle', tone: 'out' },
+  SELL: { label: 'فروش طلا', icon: 'remove_circle', tone: 'in' },
+  CONVERT: { label: 'تبدیل', icon: 'swap_horiz', tone: 'swap' },
+  FEE: { label: 'کارمزد', icon: 'percent', tone: 'fee' }
+}
+
+/** Persian label for a wallet transaction kind; unknown values pass through. */
+export function faTxKind(kind) {
+  return TX_KIND[kind]?.label ?? kind ?? '—'
+}
+
+export function txKindIcon(kind) {
+  return TX_KIND[kind]?.icon ?? 'receipt_long'
+}
+
+export function txKindTone(kind) {
+  return TX_KIND[kind]?.tone ?? 'muted'
+}
+
+/**
+ * Signed amount for the statement. `CONVERT` rows always carry a zero cash
+ * impact, so show a dash rather than a misleading «۰» with a direction.
+ */
+export function faTxAmount(tx) {
+  const n = Number(tx?.amount)
+  if (!Number.isFinite(n) || n === 0) return '—'
+  return `${n > 0 ? '+' : '−'}${faNumber(Math.abs(n))}`
 }
 
 export function faCompact(value) {
@@ -186,7 +236,12 @@ export const ORDER_STATUS = {
   CONFIRMED: { label: 'تأیید شده', tone: 'confirmed', icon: 'check_circle' },
   PREPARING: { label: 'در حال آماده‌سازی', tone: 'preparing', icon: 'inventory_2' },
   DELIVERED: { label: 'تحویل شده', tone: 'delivered', icon: 'local_shipping' },
-  CANCELLED: { label: 'لغو شده', tone: 'cancelled', icon: 'cancel' }
+  CANCELLED: { label: 'لغو شده', tone: 'cancelled', icon: 'cancel' },
+  MANUAL: { label: 'ثبت دستی', tone: 'pending', icon: 'edit_note' },
+  AWAITING_RECEIPT: { label: 'در انتظار رسید', tone: 'pending', icon: 'receipt_long' },
+  APPROVED: { label: 'تأیید شده', tone: 'confirmed', icon: 'check_circle' },
+  FULFILLED: { label: 'انجام شده', tone: 'delivered', icon: 'local_shipping' },
+  REJECTED: { label: 'رد شده', tone: 'cancelled', icon: 'cancel' }
 }
 
 /** Persian label for an order status; unknown values fall back to the raw text. */
@@ -204,7 +259,7 @@ export function statusIcon(status) {
 
 /** The visible progress of an order, 0..1, for the status rail. */
 export function statusStep(status) {
-  const order = ['PENDING', 'CONFIRMED', 'PREPARING', 'DELIVERED']
+  const order = ['MANUAL', 'AWAITING_RECEIPT', 'APPROVED', 'FULFILLED']
   const i = order.indexOf(status)
   return i < 0 ? 0 : (i + 1) / order.length
 }

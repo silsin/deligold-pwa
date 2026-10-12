@@ -1,0 +1,32 @@
+# syntax=docker/dockerfile:1
+
+###############################################################################
+# delly-pwa — development image (Vite dev server with hot reload)
+#
+#   docker compose -f docker-compose.dev.yml up
+#
+# Not part of the production build. Vite already watches files and speaks HMR
+# over its own websocket, so it must not run behind nginx — nginx would swallow
+# the upgrade. vite.config.js binds 0.0.0.0:5173, which is what makes it
+# reachable from outside the container.
+#
+# As in the production image, node_modules is installed inside the container and
+# never mounted from the host: esbuild ships a platform-specific binary, so
+# sharing a Windows or macOS node_modules would break the build.
+###############################################################################
+
+FROM node:22-alpine
+
+WORKDIR /app
+
+# Same lockfile-pinned install as the production build stage.
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY . .
+
+# Vite needs this to accept connections from outside the container.
+ENV HOST=0.0.0.0
+EXPOSE 9741
+
+CMD ["npm", "run", "dev"]

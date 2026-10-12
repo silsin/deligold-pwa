@@ -1,0 +1,104 @@
+###############################################################################
+# delly-pwa — nginx site config, rendered from a template at container start
+#
+# The nginx image's 20-envsubst-on-templates.sh renders this to
+# /etc/nginx/conf.d/default.conf, substituting only the variables that are
+# actually defined in the environment. nginx's own runtime variables ($uri,
+# $host, …) therefore survive untouched — they are not in that list.
+#
+#   ${PORT}          listen port. Default set via ENV in the Dockerfile.
+#   ${DNS_RESOLVER}  Docker's embedded DNS, for the runtime /api proxy target.
+#
+# Plain ${VAR} with no default, because envsubst does not understand bash's
+# ${VAR:-fallback}; defaults belong in the Dockerfile as ENV.
+#
+# The optional NestJS-routes reverse proxy is written to /etc/nginx/api-location.inc by
+# docker/entrypoint.sh, which runs after envsubst. A template cannot express
+# "omit this block entirely unless API_UPSTREAM is set", so it lives in a shell
+# hook instead.
+###############################################################################
+
+# The app uses hash history (vue-router createWebHashHistory) plus a relative
+# Vite base ('./'), so there are no server rewrites to configure: every
+# client-side route resolves from index.html, from any path the image is served
+# under.
+server {
+    listen       ${PORT};
+    listen       [::]:${PORT};
+    server_name  _;
+
+    root  /usr/share/nginx/html;
+    index index.html;
+
+    # Either the NestJS-routes proxy_pass block or a no-op comment; always present.
+    include /etc/nginx/api-location.inc;
+
+    # ── The shell ────────────────────────────────────────────────────────────
+    # Never cached: a cached index.html pins users to an old bundle forever,
+    # because it is the file that names the current hashed JS/CSS.
+    location = /index.html {
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # ── The service worker ───────────────────────────────────────────────────
+    # registerType:'autoUpdate' can only take effect if the browser revalidates
+    # sw.js on every load. Cache these for even a minute and the PWA keeps
+    # serving the previous build indefinitely.
+    location = /sw.js {
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+        # The SW registers with scope './'; this keeps it valid if the app is
+        # ever served from a sub-path.
+        add_header Service-Worker-Allowed "/" always;
+    }
+
+    location = /registerSW.js {
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+    }
+
+    # Workbox runtime: content-hashed, so caching it hard is safe.
+    location ~ ^/workbox-.*\.js$ {
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+    }
+
+    # nginx's stock mime.types has no webmanifest entry, so the browser would
+    # get text/plain and refuse to install the PWA.
+    location = /manifest.webmanifest {
+        default_type application/manifest+json;
+        add_header Cache-Control "no-cache, must-revalidate" always;
+    }
+
+    # ── Vite build output ────────────────────────────────────────────────────
+    # Filenames are fingerprinted, so aggressive caching is safe: a new build
+    # gets new URLs, and index.html (never cached) points at them.
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+    }
+
+    # Brand assets change only with a deploy, and the manifest pins exact URLs.
+    # Stock mime.types already maps png and woff2 correctly.
+    location ~* ^/(icons/|favicon\.png) {
+        add_header Cache-Control "public, max-age=604800" always;
+    }
+
+    # ── Ops ──────────────────────────────────────────────────────────────────
+    location = /healthz {
+        access_log off;
+        add_header Content-Type text/plain;
+        return 200 "ok\n";
+    }
+
+    # Don't advertise the nginx version to the internet.
+    server_tokens off;
+
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_comp_level 6;
+    # woff2 is already compressed — gzipping it wastes CPU for no gain.
+    gzip_types text/plain text/css application/javascript application/json
+               application/manifest+json image/svg+xml;
+}

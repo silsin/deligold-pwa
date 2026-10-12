@@ -1,11 +1,12 @@
 import axios from 'axios'
 
 /**
- * API base for the deli-gold server.
+ * API base for the NestJS delly-api.
  *
  * Production: the PWA is a different origin, so `VITE_API_URL` must point at the
- * Next.js app (and the server must list this origin in `TRADE_CORS_ORIGINS`).
- * Development: Vite proxies `/api` to the local Next app, so a relative base
+ * NestJS API (and the API must list this origin in its CORS origins).
+ * Development: Vite proxies `/auth /users /trade /wallet /market /reports
+ * /stores /uploads` to the local delly-api (port 7456), so a relative base
  * avoids CORS entirely.
  */
 const baseURL = import.meta.env.VITE_API_URL || '/'
