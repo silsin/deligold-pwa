@@ -36,3 +36,11 @@ uploads/
 .idea
 .DS_Store
 Thumbs.db
+
+# scratch build/dev logs and temp commit-message files
+*-build.txt
+*-dev.txt
+feed.log
+wmsg.txt
+delly-msg.txt
+msg.txt
