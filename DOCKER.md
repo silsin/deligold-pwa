@@ -1,33 +1,68 @@
-# Running delly-pwa in Docker
+# Running delly in Docker
 
-Two images, deliberately separate:
+**One repository, one command, two services.** The PWA (`delly-pwa`) and the
+API (`api/`, NestJS + Prisma + SQLite) both live here, and a single
+`docker compose up --build -d` starts both.
 
-| File           | Use         | Serves                                  |
-| -------------- | ----------- | --------------------------------------- |
-| `Dockerfile`   | production  | the static `dist/` build, via nginx     |
-| `Dockerfile.dev` | development | the Vite dev server, with hot reload  |
+| File                | Image           | Serves                                      | Port  |
+| ------------------- | --------------- | ------------------------------------------- | ----- |
+| `Dockerfile`        | `delly-pwa`     | the static `dist/` build, via nginx         | 9741  |
+| `Dockerfile.dev`    | `delly-pwa:dev` | the Vite dev server, with hot reload        | 9741  |
+| `api/Dockerfile`    | `delly-api`     | the NestJS API (built from `api/src`)       | 7456  |
 
-Docker is **not** required for local work — `npm run dev` is unchanged.
+Docker is **not** required for local work — `npm run dev` and
+`cd api && npm run start:dev` are unchanged.
 
 ---
 
 ## Production
 
 ```bash
-docker build -t delly-pwa .
-docker run --rm -p 9741:9741 delly-pwa
-# → http://localhost:9741
-```
-
-Or with Compose (interpolates the `.env` file — copy `.env.example` first):
-
-```bash
-cp .env.example .env
+cp .env.example .env      # then set JWT_SECRET
 docker compose up --build -d
+#  PWA → http://localhost:9741
+#  API → http://localhost:7456
 ```
 
-The build is multi-stage, so the final image contains **no Node.js** — only the
-built bundle and nginx.
+Two containers, and nothing else to install, configure, or point at each other:
+
+- `pwa` build arg `VITE_API_URL` is **empty on purpose**. `API_UPSTREAM=http://api:7456`
+  makes its nginx reverse-proxy the eight NestJS routes
+  (`/auth /users /trade /wallet /market /reports /stores /uploads`) to the `api`
+  container, so the browser stays **same-origin** and CORS never comes into play.
+- The target is resolved **per request** through Docker's embedded DNS
+  (`DNS_RESOLVER=127.0.0.11`), so the order the two containers start in does not
+  matter, and a restarting API never takes nginx down with it.
+- The SQLite database and the uploaded bank receipts live on the `delly_data`
+  volume at `/data` — **outside** both images. Rebuilds, upgrades and
+  `docker compose down` do not touch them.
+
+The PWA image is multi-stage and contains **no Node.js** — only the built bundle
+and nginx. The API image runs `node dist/main.js` (Nest, not Fastify/Express).
+
+### The API service (`api/`)
+
+On start it runs, in order:
+
+```sh
+npx prisma db push      # apply the schema — idempotent, no migrations folder
+ts-node src/seed.ts     # upsert the chart of accounts — re-running is a no-op
+node dist/main.js       # listen on PORT
+```
+
+`node:22-alpine` matches the local toolchain, and devDependencies stay installed
+because `db push` and `seed` need the Prisma CLI and `ts-node`.
+
+| Variable          | Default                      | Notes                                             |
+| ----------------- | ---------------------------- | ------------------------------------------------- |
+| `PORT`            | `7456`                       | Container listen port; host port is `API_PORT`.    |
+| `DATABASE_URL`    | `file:/data/dev.db`          | Points at the volume, never the image filesystem.  |
+| `UPLOAD_DIR`      | `/data/uploads`              | Bank receipts submitted for order review.          |
+| `JWT_SECRET`      | `change-me-in-production`    | **Set a long random value** via `.env`.            |
+| `CORS_ORIGINS`    | *(empty)*                    | Only needed if you build with `VITE_API_URL`.      |
+
+Because the receipts and the DB are on a volume, **back up the `delly_data`
+volume** — it is the only copy of your ledger and of the receipt images.
 
 ---
 
@@ -89,20 +124,24 @@ shell-form `HEALTHCHECK`.
 
 ```bash
 docker compose -f docker-compose.dev.yml up
-# → http://localhost:9741
+#  PWA (HMR): http://localhost:9741
+#  API:       http://localhost:7456
 ```
 
-Runs `npm run dev` with the working tree bind-mounted, so edits trigger hot
-reload. `vite.config.js` already proxies the NestJS routes to `DG_API_TARGET`;
-set it if your API is not on `127.0.0.1:7456`:
+Both source trees are bind-mounted, so edits appear instantly; the API side runs
+`npx prisma db push && npm run start:dev`. `vite.config.js` already proxies the
+NestJS routes to `DG_API_TARGET`, which the compose file sets to the
+`api-dev` service name:
 
 ```bash
-DG_API_TARGET=http://172.17.0.1:7456 docker compose -f docker-compose.dev.yml up
+DG_API_TARGET=http://host.docker.internal:7456 docker compose -f docker-compose.dev.yml up
 ```
 
-`node_modules` is an anonymous volume, installed *inside* the container on
-purpose: `esbuild` ships a platform-specific binary, so sharing a host
-`node_modules` would break the build.
+`node_modules` is a **named volume** in both services, installed *inside* the
+container on purpose: `esbuild` and Prisma ship platform-specific binaries, so
+sharing a Windows/macOS host `node_modules` would break both builds. Dev data
+(`delly_data_dev`) is likewise its own volume, so hot-reload work never touches
+the production database.
 
 ---
 
@@ -135,14 +174,21 @@ template.
 ## Layout
 
 ```
-Dockerfile                          production: Vite build → nginx
-Dockerfile.dev                      development: Vite dev server
-docker-compose.yml                  production
-docker-compose.dev.yml              development
-docker/entrypoint.sh                writes the optional NestJS-routes proxy block
-docker/nginx/templates/             nginx config, rendered at container start
-.dockerignore                       keeps dist/ and node_modules/ out of the context
+api/                             the NestJS API — one place, no second repo
+  Dockerfile  .dockerignore      production image
+  src/  prisma/  nest-cli.json
+Dockerfile                       production: Vite build → nginx
+Dockerfile.dev                   development: Vite dev server
+docker-compose.yml               production: api + pwa
+docker-compose.dev.yml           development: api (watch) + pwa (HMR)
+docker/entrypoint.sh             writes the optional NestJS-routes proxy block
+docker/nginx/templates/          nginx config, rendered at container start
+.dockerignore                    root image context (excludes api/ — own context)
 ```
+
+`api/` is a **separate build context** with its own `Dockerfile`, so it is listed
+in the root `.dockerignore`: copying it into the PWA image would double the build
+time and ship a Node tree the image does not need.
 
 `docker/nginx/templates/default.conf.template` is rendered by the nginx image's
 own `20-envsubst-on-templates.sh`, which substitutes only variables that are
@@ -170,16 +216,25 @@ a template cannot express:
 ## Verifying
 
 ```bash
-docker build -t delly-pwa . && docker run --rm -p 9741:9741 delly-pwa
+docker compose up --build -d
+docker compose ps                      # both services should report healthy
 
+curl -s  http://localhost:7456/market/board | head -c 200   # API, directly
+curl -s  http://localhost:9741/market/board | head -c 200   # same JSON, through the pwa proxy
 curl -sI http://localhost:9741/ | grep -i cache-control
 curl -sI http://localhost:9741/sw.js | grep -i cache-control
 curl -sI http://localhost:9741/manifest.webmanifest | grep -i content-type
 curl -s  http://localhost:9741/healthz
 ```
 
-Expected: `no-store` for `/` and `/sw.js`, `application/manifest+json` for the
-manifest, and `ok` from the health endpoint.
+The two `market/board` calls returning identical JSON is the real proof that the
+proxy is wired up. Expected otherwise: `no-store` for `/` and `/sw.js`,
+`application/manifest+json` for the manifest, and `ok` from the health endpoint.
+
+```bash
+docker compose logs -f api             # schema push, seed, then "Nest application successfully started"
+docker compose exec api sh -c 'ls -l /data'   # dev.db + uploads/ on the volume
+```
 
 ---
 
@@ -193,8 +248,14 @@ manifest, and `ok` from the health endpoint.
 - **No HTTPS.** Terminate TLS at a reverse proxy or load balancer in front. This
   matters more than usual for a PWA: a service worker requires a secure context
   (or `localhost`).
-- **Not built in this environment.** Docker is not installed here, so the image
-  was not actually built or run. What *was* verified: `npm run build` succeeds,
+- **Not built in this environment.** Docker is not installed here, so the images
+  were not actually built or run. What *was* verified: `npm run build` succeeds,
   the nginx template renders correctly through a real `envsubst`, and
   `docker/entrypoint.sh` was executed against a sandboxed `/etc/nginx` for both
   the `API_UPSTREAM`-set and unset paths, plus the IPv6-stripping `sed`.
+- **SQLite is the only store.** It is fine for one container on one host, but it
+  does not tolerate two writers: run exactly one `api` replica unless you switch
+  `datasource db.provider` and scale out.
+- **No migrations folder.** `prisma db push` applies the schema directly and will
+  not warn you about a destructive column change. Before upgrading, snapshot the
+  `delly_data` volume.

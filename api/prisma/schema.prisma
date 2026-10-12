@@ -1,0 +1,537 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// delly-api — Prisma schema
+//
+// A gold trade platform. Four roles (SUPER_ADMIN, BROKER_ADMIN, BROKER_MANAGER,
+// CUSTOMER), per-user gold wallets, and a real double-entry ledger
+// (بدهکار/بستانکار) so every gram and Toman can be accounted for and reported.
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ── Users & roles ───────────────────────────────────────────────────────────
+
+/// The four roles the platform supports.
+/// SUPER_ADMIN owns everything; BROKER_ADMIN runs an organisation;
+/// BROKER_MANAGER is staff inside one; CUSTOMER trades from the app.
+enum Role {
+  SUPER_ADMIN
+  BROKER_ADMIN
+  BROKER_MANAGER
+  CUSTOMER
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING
+}
+
+model User {
+  id        String     @id @default(uuid())
+  /// Login identity. Nullable because staff created by an admin may not have
+  /// registered a phone yet — they are invited instead.
+  phone     String?    @unique
+  email     String?    @unique
+  name      String
+  /// National ID / business registration — kept for compliance reporting.
+  nationalId String?
+  password  String?
+  role      Role       @default(CUSTOMER)
+  status    UserStatus @default(ACTIVE)
+
+  /// ── Verification badge (تأیید هویت) ──────────────────────────────────────
+  /// A customer whose profile is complete AND who has been checked by staff
+  /// gets this timestamp, and the app shows them a ✓ badge.
+  ///
+  /// The badge is what unlocks instant wallet trading. Without it a customer
+  /// can still buy gold, but only against a bank transfer whose receipt a
+  /// broker manager has to approve first (see OrderKind.MANUAL) — an unknown
+  /// buyer must never be able to move real gold on trust.
+  verifiedAt   DateTime?
+  verifiedById String?
+  verifiedBy   User?    @relation("UserVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+  verifications User[]  @relation("UserVerifiedBy")
+  /// Set when a check is refused, so the customer sees why the badge is missing.
+  verifyNote   String?
+
+  /// Delivery address, used when a customer asks for gold to be shipped rather
+  /// than collected in person.
+  address      String?
+
+  orders       Order[]
+  reviews      Order[]  @relation("OrderReviewedBy")
+
+  /// Organisation this user belongs to, so a BROKER_ADMIN only ever sees their
+  /// own subtree. Null for SUPER_ADMIN, who sees everything.
+  brokerId  String?
+  broker    Broker?    @relation(fields: [brokerId], references: [id], onDelete: SetNull)
+
+  /// Who created this account. Null = self-registered in the app.
+  createdById String?
+  createdBy   User?    @relation("UserCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdUsers User[]  @relation("UserCreatedBy")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  wallet         Wallet?
+  ledger         LedgerEntry[] @relation("LedgerUser")
+  postedEntries  LedgerEntry[] @relation("LedgerPostedBy")
+  auditLogs      AuditLog[]
+  roleChanges    RoleChange[]  @relation("RoleChangeTarget")
+  grantedChanges RoleChange[]  @relation("RoleChangeGranter")
+  sessions       Session[]
+
+  @@index([role])
+  @@index([brokerId])
+}
+
+/// A broker organisation. BROKER_ADMIN and their managers/customers hang off it.
+model Broker {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  /// The manual gold storefronts this broker operates.
+  stores    Store[]
+  users     User[]
+  accounts  Account[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// A physical/manual gold shop that posts real-world gold into the platform.
+model Store {
+  id        String   @id @default(uuid())
+  brokerId  String
+  broker    Broker   @relation(fields: [brokerId], references: [id], onDelete: Cascade)
+  name      String
+  address   String?
+  active    Boolean  @default(true)
+  /// Grams of each symbol physically held in the store vault.
+  holdings  StoreHolding[]
+  movements StoreMovement[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Hash of the refresh token, never the token itself.
+  tokenHash String
+  userAgent String?
+  ip        String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+
+// ── Wallets & positions ─────────────────────────────────────────────────────
+
+model Wallet {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Cash balance in Toman. The single source of truth — the ledger must always
+  /// reconcile to it.
+  balance     Decimal @default(0) 
+  /// Total P/L realised across closed trades.
+  realizedPnl Decimal @default(0) 
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  positions   Position[]
+  deposits    Deposit[]
+  withdrawals Withdrawal[]
+  entries     LedgerEntry[]
+}
+
+/// Gold held per symbol. Grams are Decimal, not Float: fractional grams (0.5 g)
+/// are a normal trade size and drift is not acceptable in money.
+model Position {
+  id       String @id @default(uuid())
+  walletId String
+  wallet   Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  symbol   String
+  grams    Decimal @default(0) 
+  /// Weighted-average cost basis in Toman per gram.
+  avgCost  Decimal @default(0) 
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  /// One row per symbol per wallet.
+  @@unique([walletId, symbol])
+  @@index([symbol])
+}
+
+// ── Orders ──────────────────────────────────────────────────────────────────
+
+enum OrderSide {
+  BUY
+  SELL
+}
+
+enum OrderKind {
+  /// Normal market trade paid from (or credited to) the cash wallet.
+  TRADE
+  /// Gold-for-gold swap: no cash moves, weight transfers between symbols.
+  CONVERT
+  /// Physical gold bought against a bank transfer: the customer pays outside
+  /// the app and uploads a receipt, so it settles by hand after a broker
+  /// manager reviews it — never straight from the wallet.
+  MANUAL
+}
+
+/// How a bought bar/coin reaches the customer. Chosen by the customer when they
+/// place a MANUAL order, and shown on the broker manager's review queue.
+enum FulfillmentMethod {
+  /// Customer collects it from a store in person.
+  PICKUP
+  /// The broker manager ships it to the customer's address.
+  DELIVERY
+}
+
+enum OrderStatus {
+  /// Settled instantly from the cash wallet — verified customers only.
+  FILLED
+  REJECTED
+  CANCELLED
+  /// MANUAL order placed; waiting for the customer to upload a receipt.
+  AWAITING_RECEIPT
+  /// Receipt uploaded; waiting on a broker manager to review it.
+  PENDING_REVIEW
+  /// Broker manager accepted the receipt; gold is queued for hand-over.
+  APPROVED
+  /// Gold handed over in person, or dispatched to the customer.
+  FULFILLED
+}
+
+model Order {
+  id         String      @id @default(uuid())
+  /// Human-facing reference, e.g. "DLY-000123", for receipts and support.
+  ref        String      @unique
+  userId     String
+  symbol     String
+  side       OrderSide
+  kind       OrderKind   @default(TRADE)
+  grams      Decimal     
+  /// Execution price in Toman per gram — the server's own reading, never the
+  /// client's number.
+  price      Decimal     
+  /// grams × price, rounded to whole Toman.
+  amount     Decimal     
+  /// Commission charged on this order.
+  fee        Decimal     
+  /// Realised P/L; null on a BUY, set when the position is closed.
+  pnl        Decimal?    
+  status     OrderStatus @default(FILLED)
+
+  // ── Manual (receipt) settlement ───────────────────────────────────────────
+  // Only MANUAL orders use these. A customer who is not yet verified cannot pay
+  // from the wallet, so they bank-transfer instead and send the receipt to a
+  // broker manager, who approves it before the gold is handed over.
+  /// PICKUP = collect in store, DELIVERY = the manager ships it.
+  fulfillment      FulfillmentMethod?
+  /// Where to deliver when `fulfillment` is DELIVERY. Required then.
+  deliveryAddress  String?
+  /// Path/URL of the uploaded bank receipt. Required once submitted for review.
+  receiptPath      String?
+  /// What the customer typed on the receipt (e.g. a tracing number).
+  receiptNote      String?
+  receiptAt        DateTime?
+  /// Broker manager who approved or rejected it, and why.
+  reviewedById     String?
+  reviewedBy       User?   @relation("OrderReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt       DateTime?
+  reviewNote       String?
+
+  /// The CONVERT this leg belongs to, so both halves report as one trade.
+  convertId  String?
+  convert    Convert?    @relation(fields: [convertId], references: [id], onDelete: Cascade)
+
+  user       User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([symbol, createdAt])
+  @@index([kind, createdAt])
+  /// The broker manager's review queue is "every PENDING_REVIEW in my broker".
+  @@index([status, createdAt])
+}
+
+/// A gold-for-gold conversion: two Order legs (SELL the source, BUY the target)
+/// that share one `convertId` and settle with no net cash movement.
+model Convert {
+  id          String   @id @default(uuid())
+  ref         String   @unique
+  userId      String
+  fromSymbol  String
+  toSymbol    String
+  gramsIn     Decimal  
+  gramsOut    Decimal  
+  grossAmount Decimal  
+  fee         Decimal  
+  createdAt   DateTime @default(now())
+
+  legs Order[]
+
+  @@index([userId, createdAt])
+}
+
+// ── Cash movement ───────────────────────────────────────────────────────────
+
+enum DepositStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Deposit {
+  id           String        @id @default(uuid())
+  ref          String        @unique
+  walletId     String
+  wallet       Wallet        @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  amount       Decimal       
+  status       DepositStatus @default(PENDING)
+  /// How the money arrived — a PSP reference, or DEMO for the test top-up.
+  method       String
+  reference    String?
+  note         String?
+  approvedById String?
+  approvedAt   DateTime?
+  createdAt    DateTime      @default(now())
+
+  @@index([walletId, createdAt])
+  @@index([status])
+}
+
+enum WithdrawalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Withdrawal {
+  id           String           @id @default(uuid())
+  ref          String           @unique
+  walletId     String
+  wallet       Wallet           @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  amount       Decimal          
+  fee          Decimal          @default(0) 
+  status       WithdrawalStatus @default(PENDING)
+  /// Destination the funds are paid out to (bank account, wallet, …).
+  destination  String?
+  note         String?
+  approvedById String?
+  approvedAt   DateTime?
+  createdAt    DateTime         @default(now())
+
+  @@index([walletId, createdAt])
+  @@index([status])
+}
+
+// ── Accounting (حسابداری) ───────────────────────────────────────────────────
+
+/// Account types on the chart of accounts.
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+/// The chart of accounts. Every posting references one of these.
+///
+/// Code convention, so reports read like a real general ledger:
+///   1000  Cash held on behalf of customers      (ASSET)
+///   1100  Gold held for customers, per symbol   (ASSET)
+///   2000  Customer cash balances payable        (LIABILITY)
+///   2100  Customer gold balances payable        (LIABILITY)
+///   3000  Paid-in capital                       (EQUITY)
+///   4000  Commission / trading revenue          (REVENUE)
+///   5000  Operating expense                     (EXPENSE)
+model Account {
+  id       String      @id @default(uuid())
+  /// Numeric code, e.g. "1100" — how accountants read the books.
+  code     String
+  name     String
+  type     AccountType
+  /// Parent for sub-accounts (e.g. per-broker or per-symbol breakdowns).
+  parentId String?
+  parent   Account?    @relation("AccountTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children Account[]   @relation("AccountTree")
+  /// Null = a platform-wide account; set for a broker-scoped ledger.
+  brokerId String?
+  broker   Broker?     @relation(fields: [brokerId], references: [id], onDelete: Cascade)
+  /// Restricts an account to one gold symbol (the per-symbol gold accounts).
+  symbol   String?
+  active   Boolean     @default(true)
+
+  lines LedgerLine[]
+
+  /// One account per code per broker per symbol, so a platform account and a
+  /// broker's own copy of the same code can coexist.
+  @@unique([code, brokerId, symbol])
+  @@index([type])
+}
+
+enum LedgerKind {
+  DEPOSIT
+  WITHDRAWAL
+  BUY
+  SELL
+  FEE
+  CONVERT
+  ADJUSTMENT
+  STORE_IN
+  STORE_OUT
+}
+
+/// One journal entry = one economic event (a buy, a sale, a deposit, a fee).
+/// `totalDebit === totalCredit` always — that invariant is what makes it
+/// double-entry rather than just a list of movements.
+model LedgerEntry {
+  id       String   @id @default(uuid())
+  ref      String   @unique
+  /// When the event happened; distinct from `createdAt` (when it was recorded).
+  postedAt DateTime
+  memo     String
+  /// The event this entry documents.
+  kind     LedgerKind
+
+  userId   String?
+  user     User?    @relation("LedgerUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  walletId String?
+  wallet   Wallet?  @relation(fields: [walletId], references: [id], onDelete: SetNull)
+
+  /// Who recorded it — an admin action needs an author for the audit trail.
+  postedById String?
+  postedBy   User?   @relation("LedgerPostedBy", fields: [postedById], references: [id], onDelete: SetNull)
+
+  /// Denormalised totals so reports don't re-sum every line each time.
+  totalDebit  Decimal 
+  totalCredit Decimal 
+
+  createdAt DateTime @default(now())
+
+  lines LedgerLine[]
+
+  @@index([userId, postedAt])
+  @@index([walletId, postedAt])
+  @@index([kind, postedAt])
+}
+
+/// One side of a journal entry: either a debit or a credit, never both.
+model LedgerLine {
+  id        String      @id @default(uuid())
+  entryId   String
+  entry     LedgerEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  accountId String
+  account   Account     @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  /// Exactly one of these is non-zero.
+  debit     Decimal     @default(0) 
+  credit    Decimal     @default(0) 
+
+  /// Present when the line moves gold rather than cash, so gram positions can be
+  /// reconciled the same way as money.
+  symbol    String?
+  grams     Decimal?    
+
+  @@index([entryId])
+  @@index([accountId])
+}
+
+
+// ── Store vaults (انبار طلا / طلای فروخته‌شده) ─────────────────────────────
+
+/// Grams of a symbol physically in a store vault.
+model StoreHolding {
+  id        String   @id @default(uuid())
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  symbol    String
+  grams     Decimal  @default(0) 
+  avgCost   Decimal  @default(0) 
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@unique([storeId, symbol])
+}
+
+enum MovementDirection {
+  IN
+  OUT
+}
+
+/// Every change to a vault: gold in from a supplier, out to a customer, or
+/// transferred to the trading pool.
+model StoreMovement {
+  id          String            @id @default(uuid())
+  storeId     String
+  store       Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  symbol      String
+  direction   MovementDirection
+  grams       Decimal           
+  price       Decimal?          
+  reason      String?
+  /// Links the movement to the ledger entry that recorded it.
+  entryId     String?
+  createdById String?
+  createdAt   DateTime          @default(now())
+
+  @@index([storeId, createdAt])
+}
+
+// ── Audit ───────────────────────────────────────────────────────────────────
+
+/// Every privileged action, so "who changed what" is answerable later.
+model AuditLog {
+  id        String   @id @default(uuid())
+  actorId   String?
+  actor     User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action    String
+  entity    String
+  entityId  String?
+  /// Before/after snapshot for the fields that changed.
+  before    Json?
+  after     Json?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([entity, entityId])
+}
+
+/// Role grants and revocations, kept separately from AuditLog because role
+/// changes are the highest-risk action and need their own history.
+model RoleChange {
+  id        String   @id @default(uuid())
+  targetId  String
+  target    User     @relation("RoleChangeTarget", fields: [targetId], references: [id], onDelete: Cascade)
+  granterId String?
+  granter   User?    @relation("RoleChangeGranter", fields: [granterId], references: [id], onDelete: SetNull)
+  fromRole  Role?
+  toRole    Role
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@index([targetId, createdAt])
+}
+

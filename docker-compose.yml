@@ -1,41 +1,72 @@
 ###############################################################################
-# delly-pwa — production compose
+# delly — ONE repo, ONE command: API (NestJS) + PWA (nginx) side by side.
 #
-#   docker compose up --build                 serve on http://localhost:9741
-#   API_UPSTREAM=http://host.docker.internal:7456 docker compose up
+#   docker compose up --build -d
+#     PWA:  http://localhost:9741
+#     API:  http://localhost:7456   (internal via the pwa proxy; also published)
 #
-# The image is self-contained; `depends_on` on the API is intentionally NOT
-# used, because nginx resolves the upstream per-request (see docker/entrypoint.sh)
-# and therefore starts fine without it.
+# The pwa container's nginx proxies the eight NestJS routes (/auth /users /trade
+# /wallet /market /reports /stores /uploads) to the api service at request time,
+# so the browser stays same-origin and needs no CORS. Data (SQLite DB + uploaded
+# receipts) lives on the delly_data volume and survives rebuilds.
+#
+# Override secrets/ports via .env (see .env.example): JWT_SECRET, PORT, API_PORT.
 ###############################################################################
 
 services:
-  delly-pwa:
+  api:
+    build: ./api
+    image: delly-api:${IMAGE_TAG:-latest}
+    container_name: delly-api
+    environment:
+      PORT: 7456
+      # SQLite file + receipts on the shared volume, outside the container fs.
+      DATABASE_URL: "file:/data/dev.db"
+      UPLOAD_DIR: /data/uploads
+      # CHANGE THIS via .env in any real deployment.
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+    volumes:
+      - delly_data:/data
+    ports:
+      - "${API_PORT:-7456}:7456"
+    restart: unless-stopped
+    healthcheck:
+      # Public board route — enough to prove the HTTP server + DB are alive.
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider",
+             "http://127.0.0.1:7456/market/board"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 25s
+
+  pwa:
     build:
       context: .
-      # Baked into the bundle at build time. Empty by default, which keeps the
-      # relative '/'-based API URL — correct when API_UPSTREAM proxies /api, and
-      # also correct behind an existing reverse proxy that already routes /api.
       args:
+        # Baked into the bundle at build time. EMPTY is correct here: the
+        # container proxies the API routes itself (API_UPSTREAM below).
         VITE_API_URL: ${VITE_API_URL:-}
     image: delly-pwa:${IMAGE_TAG:-latest}
     container_name: delly-pwa
-    ports:
-      - "${PORT:-9741}:${PORT:-9741}"
+    depends_on:
+      - api
     environment:
-      PORT: ${PORT:-9741}
-      # Set this to make the PWA same-origin with the API, e.g.
-      #   Docker Desktop: http://host.docker.internal:7456
-      #   compose service: http://delly-api:7456
-      API_UPSTREAM: ${API_UPSTREAM:-}
-      DNS_RESOLVER: ${DNS_RESOLVER:-127.0.0.11}
+      PORT: 9741
+      # Same-origin proxy target. nginx resolves the hostname `api` per request
+      # through Docker's embedded DNS (DNS_RESOLVER), so startup order does not
+      # matter and a restarting api container never breaks nginx.
+      API_UPSTREAM: http://api:7456
+      DNS_RESOLVER: 127.0.0.11
+    ports:
+      - "${PORT:-9741}:9741"
     restart: unless-stopped
     healthcheck:
-      # Inherited from the image, but made explicit so `docker compose ps`
-      # reports it and it is obvious how to override.
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider",
-             "http://127.0.0.1:${PORT:-9741}/healthz"]
+             "http://127.0.0.1:9741/healthz"]
       interval: 30s
       timeout: 3s
       retries: 3
       start_period: 5s
+
+volumes:
+  delly_data:

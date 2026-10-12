@@ -19,6 +19,16 @@ build-out.txt
 build-err.txt
 pwa-dev-out.txt
 pwa-dev-err.txt
+dev-9741.txt
+port-build.txt
+err.txt
+*.bak
+
+# ── API data (must never be committed; the SQLite file and uploaded
+# bank receipts are live production data) ──────────────────────────────────────
+*.db
+*.db-journal
+uploads/
 
 # ── Editors & OS ──────────────────────────────────────────────────────────────
 .vscode/*

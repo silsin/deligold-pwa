@@ -1,6 +1,8 @@
 # Keep the build context tiny. `dist` is produced inside the image and
 # `node_modules` is re-installed there from the lockfile, so shipping either one
 # would only bloat the context and risk a stale/foreign-platform install.
+# `api/` is a sibling service with its own Dockerfile/context (see compose) —
+# it must never be copied into the PWA image.
 .git
 .gitignore
 .dockerignore
@@ -9,6 +11,7 @@ docker-compose.yml
 DOCKER.md
 node_modules
 dist
+api
 
 # Local noise / logs
 *.log
