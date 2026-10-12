@@ -1,5 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DEFAULT_TRADE_SYMBOL, TRADE_SYMBOLS, isTradeSymbol, type TradeSymbol } from './symbols';
+import {
+  SYMBOL_TO_UPSTREAM_ID,
+  akbariConfig,
+  akbariConfigured,
+  akbariTwoSided,
+  fetchAkbariBoard,
+  type UpstreamBoard,
+} from './akbari';
 
 /**
  * The live price board.
@@ -7,7 +15,7 @@ import { DEFAULT_TRADE_SYMBOL, TRADE_SYMBOLS, isTradeSymbol, type TradeSymbol } 
  * The API is the single place that reads an upstream quote, so the number a
  * customer sees, the number an order fills at and the number a report values a
  * position at are all the same reading. A client-supplied price is never
- * trusted — that is the whole reason pricing lives here rather than in the
+ * trusted â€” that is the whole reason pricing lives here rather than in the
  * order handler.
  *
  * Quotes are cached briefly: the board is polled by every open client, and a
@@ -16,7 +24,7 @@ import { DEFAULT_TRADE_SYMBOL, TRADE_SYMBOLS, isTradeSymbol, type TradeSymbol } 
  */
 export interface Quote {
   symbol: string;
-  /** Mid/base price in Toman — what the board displays. */
+  /** Mid/base price in Toman â€” what the board displays. */
   price: number;
   /** What the shop BUYS at (a customer selling). Null when the source has no spread. */
   buy: number | null;
@@ -65,7 +73,7 @@ export class MarketService {
    * The current board, fetching a fresh one when the cache has expired.
    *
    * Concurrent callers share one in-flight fetch rather than each triggering
-   * their own — the board is polled by every connected client, so without this
+   * their own â€” the board is polled by every connected client, so without this
    * a single tick would fan out into dozens of upstream requests.
    */
   async board(): Promise<Board> {
@@ -96,7 +104,7 @@ export class MarketService {
    * The price an order fills at.
    *
    * A customer BUYING pays the shop's ask (`sell`), and a customer SELLING
-   * receives the shop's bid (`buy`) — the same two-sided quoting the physical
+   * receives the shop's bid (`buy`) â€” the same two-sided quoting the physical
    * shops use. When a source carries no spread we synthesise one from the mid,
    * so the platform never fills both sides at the same number.
    */
@@ -118,25 +126,29 @@ export class MarketService {
    */
   private async fetchBoard(): Promise<Board> {
     try {
-      const res = await fetch('http://internal/api/admin/gold-price?source=auto', {
-        signal: AbortSignal.timeout(5_000),
-      });
-      if (!res.ok) throw new Error(`upstream ${res.status}`);
+      const cfg = akbariConfig();
 
-      const json = (await res.json()) as {
-        data?: {
-          source?: string;
-          rates?: Record<string, number | undefined>;
-          buys?: Record<string, number | undefined>;
-          sells?: Record<string, number | undefined>;
+      if (akbariConfigured(cfg)) {
+        const upstream = await fetchAkbariBoard(cfg);
+        const quotes = this.mapUpstream(upstream);
+        if (!Object.keys(quotes).length) throw new Error('upstream carried no tradeable symbols');
+
+        return {
+          quotes,
+          source: 'akbarigold',
+          // Keep the upstream's own clock so the board's age is honest.
+          updatedAt: upstream.updatedAt,
+          stale: false,
         };
-      };
-      const d = json?.data ?? {};
-      const quotes = this.mapQuotes(d.rates ?? {}, d.buys ?? {}, d.sells ?? {});
+      }
 
-      if (!Object.keys(quotes).length) throw new Error('upstream returned no rates');
-
-      return { quotes, source: d.source ?? 'upstream', updatedAt: Date.now(), stale: false };
+      // No credentials: the feed cannot be read, so say so loudly rather than
+      // silently serving numbers nobody set.
+      this.logger.error(
+        'MARKET_UID / MARKET_TOKEN are not set â€” the board cannot fetch real prices and will ' +
+          'show indicative fallback values. Set them in the environment (see api/.env).',
+      );
+      return this.fallbackBoard();
     } catch (err) {
       this.logger.warn(
         `price fetch failed, serving ${this.cache ? 'cached' : 'fallback'} board: ${String(err)}`,
@@ -146,42 +158,30 @@ export class MarketService {
   }
 
   /**
-   * Builds quotes from raw upstream rates.
+   * Builds quotes from the upstream's row map.
    *
-   * `buys`/`sells` are the shop's bid/ask. A quote is only accepted when its
-   * base price exists and the pair is sane (both positive, bid ≤ ask); when the
-   * source supplies no pair we synthesise one around the mid instead.
+   * A row we cannot map, or one the shop has switched off, is simply absent â€”
+   * the board never invents a price for an instrument it was not given.
    */
-  private mapQuotes(
-    rates: Record<string, number | undefined>,
-    buys: Record<string, number | undefined>,
-    sells: Record<string, number | undefined>,
-  ): Record<string, Quote> {
+  private mapUpstream(upstream: UpstreamBoard): Record<string, Quote> {
     const quotes: Record<string, Quote> = {};
 
     for (const { symbol } of TRADE_SYMBOLS) {
-      const raw = rates[symbol];
-      const price = Math.round(Number(raw));
-      if (!Number.isFinite(price) || price <= 0) continue;
+      const id = SYMBOL_TO_UPSTREAM_ID[symbol];
+      if (id === undefined) continue;
 
-      const buyRaw = Math.round(Number(buys[symbol]));
-      const sellRaw = Math.round(Number(sells[symbol]));
-      const pairOk =
-        Number.isFinite(buyRaw) && Number.isFinite(sellRaw) && buyRaw > 0 && sellRaw > 0 && buyRaw <= sellRaw;
+      const row = upstream.rows.get(id);
+      if (!row) continue;
 
-      if (pairOk) {
-        quotes[symbol] = { symbol, price, buy: buyRaw, sell: sellRaw };
-      } else {
-        // Synthesise a symmetric spread so a single-price source still yields a
-        // two-sided book rather than filling both directions identically.
-        const half = (price * DEFAULT_SPREAD_PERCENT) / 100;
-        quotes[symbol] = {
-          symbol,
-          price,
-          buy: Math.round(price - half),
-          sell: Math.round(price + half),
-        };
-      }
+      const twoSided = akbariTwoSided(row);
+      if (!twoSided) continue;
+
+      quotes[symbol] = {
+        symbol,
+        price: twoSided.price,
+        buy: twoSided.buy,
+        sell: twoSided.sell,
+      };
     }
 
     return quotes;

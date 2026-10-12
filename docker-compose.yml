@@ -25,6 +25,10 @@ services:
       UPLOAD_DIR: /data/uploads
       # CHANGE THIS via .env in any real deployment.
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      # Live price feed (akbarigold.ir). REQUIRED — see .env.example. Left blank
+      # the board serves hard-coded indicative prices and flags every quote stale.
+      MARKET_UID: ${MARKET_UID:-}
+      MARKET_TOKEN: ${MARKET_TOKEN:-}
     volumes:
       - delly_data:/data
     ports:
