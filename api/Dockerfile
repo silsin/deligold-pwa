@@ -39,6 +39,11 @@ EXPOSE 7456
 HEALTHCHECK --interval=30s --timeout=3s --start-period=20s --retries=3 \
   CMD wget --quiet --tries=1 --spider http://127.0.0.1:7456/market/board || exit 1
 
-# ts-node + prisma CLI stay available in the image because the boot steps need
-# them (npm ci installs devDependencies by default).
-CMD ["sh", "-c", "npx prisma db push && ts-node src/seed.ts && node dist/main.js"]
+# Boot: apply the schema, seed, then start Nest.
+#
+# Every binary is invoked through `npx` on purpose. `npm ci` does install the
+# devDependencies (prisma and ts-node are both devDeps), but node images do NOT
+# put node_modules/.bin on PATH — so a bare `ts-node` exits 127 "not found" and
+# the container crash-loops. `npx` resolves the local binary, which is why the
+# `npx prisma db push` half of this line has always worked.
+CMD ["sh", "-c", "npx prisma db push && npx ts-node src/seed.ts && node dist/main.js"]
