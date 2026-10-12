@@ -7,7 +7,7 @@
 
     <div v-if="!auth.isLoggedIn" class="gate">
       <p>برای دیدن سبد معاملاتی ابتدا وارد شوید.</p>
-      <button type="button" class="btn btn--primary" @click="$router.push('/login')">ورود</button>
+      <button type="button" class="btn btn--primary" @click="openLogin('login')">ورود</button>
     </div>
 
     <template v-else>

@@ -110,7 +110,7 @@
 
       <template v-if="!auth.isLoggedIn">
         <p class="of__gate">برای معامله ابتدا وارد حساب شوید.</p>
-        <button type="button" class="of__login" @click="$router.push('/login')">ورود / ثبت‌نام</button>
+        <button type="button" class="of__login" @click="openLogin('register')">ورود / ثبت‌نام</button>
       </template>
 
       <template v-else>

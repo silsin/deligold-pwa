@@ -33,21 +33,29 @@
           <button type="button" class="drawer__item" @click="go('/')">
             <i class="material-icons">home</i> خانه
           </button>
-          <button type="button" class="drawer__item" @click="go('/trade')">
-            <i class="material-icons">show_chart</i> معاملات
+          <button type="button" class="drawer__item" @click="go('/markets')">
+            <i class="material-icons">storefront</i> بازار
           </button>
-          <button type="button" class="drawer__item" @click="go('/portfolio')">
-            <i class="material-icons">work</i> سبد من
-          </button>
-          <button type="button" class="drawer__item" @click="go('/history')">
-            <i class="material-icons">history</i> تاریخچه معاملات
-          </button>
-          <button type="button" class="drawer__item" @click="go('/account')">
-            <i class="material-icons">account_balance_wallet</i> مانده حساب
-          </button>
-          <button type="button" class="drawer__item" @click="go('/wallet')">
-            <i class="material-icons">savings</i> کیف پول
-          </button>
+
+          <!-- Account area: signed-in only. Guests just see the login CTA. -->
+          <template v-if="auth.isLoggedIn">
+            <button type="button" class="drawer__item" @click="go('/trade')">
+              <i class="material-icons">show_chart</i> معاملات
+            </button>
+            <button type="button" class="drawer__item" @click="go('/portfolio')">
+              <i class="material-icons">work</i> سبد من
+            </button>
+            <button type="button" class="drawer__item" @click="go('/history')">
+              <i class="material-icons">history</i> تاریخچه معاملات
+            </button>
+            <button type="button" class="drawer__item" @click="go('/account')">
+              <i class="material-icons">account_balance_wallet</i> مانده حساب
+            </button>
+            <button type="button" class="drawer__item" @click="go('/wallet')">
+              <i class="material-icons">savings</i> کیف پول
+            </button>
+          </template>
+
           <button type="button" class="drawer__item" @click="go('/settings')">
             <i class="material-icons">settings</i> تنظیمات
           </button>
@@ -57,7 +65,7 @@
           <button v-if="auth.isLoggedIn" type="button" class="drawer__item drawer__item--out" @click="logout">
             <i class="material-icons">logout</i> خروج از حساب
           </button>
-          <button v-else type="button" class="drawer__item" @click="go('/login')">
+          <button v-else type="button" class="drawer__item drawer__item--cta" @click="emit('close'); openLogin('login')">
             <i class="material-icons">login</i> ورود / ثبت‌نام
           </button>
         </nav>
@@ -243,6 +251,15 @@ function toggleTheme() {
 
 .drawer__item--out {
   color: var(--down);
+}
+
+/* Guest primary CTA — the only way in for signed-out users. */
+.drawer__item--cta {
+  margin-top: 6px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-weight: 800;
 }
 
 .drawer__foot {

@@ -20,7 +20,7 @@
     <div v-if="!auth.isLoggedIn" class="empty">
       <span class="material-icons empty__icon">account_balance_wallet</span>
       <p class="empty__text">برای دیدن کیف پول، ابتدا وارد شوید</p>
-      <button type="button" class="btn btn--primary" @click="$router.push('/login')">
+      <button type="button" class="btn btn--primary" @click="openLogin('login')">
         <span class="material-icons">login</span> ورود به حساب
       </button>
     </div>

@@ -24,7 +24,7 @@
     <div v-if="!auth.isAuthenticated" class="empty">
       <span class="material-icons empty__icon">lock</span>
       <p class="empty__text">برای مشاهده سفارش‌ها وارد حساب خود شوید</p>
-      <button type="button" class="btn btn--primary" @click="$router.push('/login')">
+      <button type="button" class="btn btn--primary" @click="openLogin('login')">
         <span class="material-icons">login</span> ورود به حساب
       </button>
     </div>

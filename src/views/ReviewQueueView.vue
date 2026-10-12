@@ -9,7 +9,7 @@
     </header>
     <div v-if="!auth.isLoggedIn" class="empty">
       <p class="empty__text">برای دیدن صف بررسی، ابتدا وارد شوید</p>
-      <button type="button" class="btn btn--primary" @click="$router.push('/login')">ورود</button>
+      <button type="button" class="btn btn--primary" @click="openLogin('login')">ورود</button>
     </div>
     <template v-else>
       <p v-if="auth.error" class="alert" role="alert">{{ auth.error }}</p>

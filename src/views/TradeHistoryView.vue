@@ -27,7 +27,7 @@
       </template>
       <template v-else>
         برای مشاهده تاریخچه وارد شوید.
-        <router-link to="/login" class="link">ورود</router-link>
+        <button type="button" class="link" @click="openLogin('login')">ورود</button>
       </template>
     </div>
 
@@ -60,7 +60,7 @@
 
     <div v-if="!auth.isAuthenticated" class="state">
       برای مشاهده تاریخچهٔ سفارشات وارد حساب کاربری خود شوید.
-      <router-link to="/login" class="link">ورود به حساب</router-link>
+      <button type="button" class="link" @click="openLogin('login')">ورود به حساب</button>
     </div>
   </div>
 </template>

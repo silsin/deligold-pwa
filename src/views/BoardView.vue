@@ -123,7 +123,7 @@
 
       <div v-else class="balance__guest">
         <p>برای مشاهده مانده حساب وارد شوید.</p>
-        <button type="button" class="balance__login" @click="$router.push('/login')">ورود</button>
+        <button type="button" class="balance__login" @click="openLogin('login')">ورود</button>
       </div>
     </section>
 

@@ -11,7 +11,7 @@
     <div v-if="!auth.isLoggedIn" class="empty">
       <span class="material-icons empty__icon">lock</span>
       <p class="empty__text">برای مشاهده حساب و بدهی، وارد شوید</p>
-      <button type="button" class="btn btn--primary" @click="$router.push('/login')">
+      <button type="button" class="btn btn--primary" @click="openLogin('login')">
         <span class="material-icons">login</span> ورود به حساب
       </button>
     </div>
@@ -254,7 +254,7 @@ async function refresh(withSpinner = true) {
   try { await Promise.all([auth.fetchProfile(), auth.fetchWallet(), auth.fetchOrders()]) }
   finally { if (withSpinner) busy.value = false }
 }
-function logout() { auth.logout(); router.push('/login') }
+function logout() { auth.logout(); router.push('/') }
 onMounted(() => { refresh() })
 </script>
 

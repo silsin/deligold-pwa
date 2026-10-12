@@ -14,7 +14,7 @@
         <RouterLink v-if="auth.isLoggedIn" to="/account" class="topbar__wallet">
           {{ faMoney(auth.balance) }}
         </RouterLink>
-        <RouterLink v-else to="/login" class="topbar__login">ورود</RouterLink>
+        <button v-else type="button" class="topbar__login" @click="openLogin('login')">ورود</button>
       </div>
     </header>
 
@@ -26,26 +26,55 @@
       </RouterView>
     </main>
 
+    <!--
+      Guests only get the public tabs; the account tabs are gated and raise the
+      login sheet instead of navigating. Signed-in users get the full set.
+    -->
     <nav class="tabbar">
       <RouterLink to="/" class="tab" exact>
         <i class="tab__icon material-icons">sell</i>
         <span class="tab__label">قیمت‌ها</span>
       </RouterLink>
-      <RouterLink to="/trade" class="tab">
+
+      <RouterLink v-if="!auth.isLoggedIn" to="/markets" class="tab">
+        <i class="tab__icon material-icons">storefront</i>
+        <span class="tab__label">بازار</span>
+      </RouterLink>
+
+      <RouterLink v-else to="/trade" class="tab">
         <i class="tab__icon material-icons">show_chart</i>
         <span class="tab__label">معاملات</span>
       </RouterLink>
-      <RouterLink to="/history" class="tab">
+
+      <button v-if="!auth.isLoggedIn" type="button" class="tab tab--gate" @click="openLogin('register')">
+        <i class="tab__icon material-icons">lock</i>
+        <span class="tab__label">معاملات</span>
+      </button>
+
+      <RouterLink v-if="auth.isLoggedIn" to="/history" class="tab">
         <i class="tab__icon material-icons">history</i>
         <span class="tab__label">تاریخچه</span>
       </RouterLink>
-      <RouterLink to="/account" class="tab">
+
+      <button v-else type="button" class="tab tab--gate" @click="openLogin('login')">
+        <i class="tab__icon material-icons">history</i>
+        <span class="tab__label">تاریخچه</span>
+      </button>
+
+      <RouterLink v-if="auth.isLoggedIn" to="/account" class="tab">
         <i class="tab__icon material-icons">account_circle</i>
         <span class="tab__label">حساب</span>
       </RouterLink>
+
+      <button v-else type="button" class="tab tab--gate" @click="openLogin('login')">
+        <i class="tab__icon material-icons">account_circle</i>
+        <span class="tab__label">حساب</span>
+      </button>
     </nav>
 
     <AppDrawer :open="drawerOpen" @close="drawerOpen = false" />
+
+    <LoginSheet />
 
     <!-- First-visit gate: manager terms must be acknowledged once per device. -->
     <TermsModal v-if="showTerms" required @close="showTerms = false" />
@@ -58,6 +87,7 @@ import { RouterLink, RouterView } from 'vue-router'
 import { useMarketStore } from './stores/market'
 import { useAuthStore } from './stores/auth'
 import AppDrawer from './components/AppDrawer.vue'
+import LoginSheet from './components/LoginSheet.vue'
 import TermsModal from './components/TermsModal.vue'
 import { applyPalette, loadPaletteId } from './theme'
 import { faMoney, faTime, termsAccepted } from './utils/format'
@@ -241,7 +271,10 @@ button {
   bottom: 0;
   z-index: 20;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  /* 4 tabs signed-in, 5 for guests (public بازار + gated tabs) — auto-fit
+     keeps every tab equal-width in both states. */
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   background: var(--bg-secondary);
   border-top: 1px solid var(--border);
 }
@@ -254,6 +287,15 @@ button {
   padding: 9px 0 10px;
   color: var(--text-muted);
   transition: color 0.15s ease;
+}
+
+/* Locked tabs: dimmed, with a lock badge on the icon. */
+.tab--gate {
+  opacity: 0.75;
+}
+
+.tab--gate .tab__icon {
+  position: relative;
 }
 
 .tab__icon {
