@@ -3,7 +3,7 @@
     <div v-if="authGate.open" class="sheet" role="dialog" aria-modal="true" aria-label="ورود به حساب">
       <div class="sheet__scrim" @click="close"></div>
 
-      <section class="sheet__panel">
+      <section class="sheet__panel" @click.stop>
         <span class="sheet__grip" aria-hidden="true"></span>
 
         <header class="sheet__head">
@@ -83,7 +83,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { authGate, closeLogin, consumeReturnTo } from '../utils/authGate'
@@ -100,6 +100,31 @@ function close() {
   closeLogin()
   auth.error = ''
 }
+
+// Escape closes the sheet — standard dialog behaviour, and the only keyboard
+// way out now that the scrim is the only other dismiss affordance.
+function onKeydown(e) {
+  if (e.key === 'Escape' && authGate.open) close()
+}
+
+// Start every session on a clean form so a half-typed sign-up never bleeds
+// into a later login attempt.
+watch(
+  () => authGate.open,
+  isOpen => {
+    if (!isOpen) return
+    auth.error = ''
+    phone.value = ''
+    password.value = ''
+    name.value = ''
+    nationalId.value = ''
+    if (typeof window !== 'undefined') window.addEventListener('keydown', onKeydown)
+  }
+)
+
+onBeforeUnmount(() => {
+  if (typeof window !== 'undefined') window.removeEventListener('keydown', onKeydown)
+})
 
 async function submit() {
   const ok =

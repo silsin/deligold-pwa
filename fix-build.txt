@@ -1,0 +1,19 @@
+
+> delly-gold-trading@1.0.0 build
+> vite build
+
+[36mvite v5.4.21 [32mbuilding for production...[36m[39m
+transforming...
+[32m✓[39m 130 modules transformed.
+rendering chunks...
+computing gzip size...
+[2mdist/[22m[32mregisterSW.js                                [39m[1m[2m  0.14 kB[22m[1m[22m
+[2mdist/[22m[32mmanifest.webmanifest                         [39m[1m[2m  0.58 kB[22m[1m[22m
+[2mdist/[22m[32mindex.html                                   [39m[1m[2m  1.10 kB[22m[1m[22m[2m │ gzip:  0.60 kB[22m
+[2mdist/[22m[32massets/Vazirmatn-latin-ext-tDTa1Fj6.woff2    [39m[1m[2m 21.86 kB[22m[1m[22m
+[2mdist/[22m[32massets/Vazirmatn-latin-BFexNX-K.woff2        [39m[1m[2m 34.52 kB[22m[1m[22m
+[2mdist/[22m[32massets/Vazirmatn-arabic-Cafbb7Zc.woff2       [39m[1m[2m 46.31 kB[22m[1m[22m
+[2mdist/[22m[32massets/MaterialIcons-Regular-D-x-0Q06.woff2  [39m[1m[2m128.62 kB[22m[1m[22m
+[2mdist/[22m[35massets/index-CQNVt-4X.css                    [39m[1m[2m 57.69 kB[22m[1m[22m[2m │ gzip: 10.16 kB[22m
+[2mdist/[22m[36massets/index-D2lR0YQT.js                     [39m[1m[2m260.14 kB[22m[1m[22m[2m │ gzip: 92.91 kB[22m
+[32m✓ built in 7.91s[39m

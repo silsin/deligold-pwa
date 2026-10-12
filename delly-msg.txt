@@ -1,0 +1,25 @@
+fix(ui): make the login sheet actually work
+
+authGate was a plain object wrapping refs. Vue only auto-unwraps refs inside
+a reactive() proxy, so in templates:
+
+- authGate.open resolved to the Ref object, which is always truthy, so
+  v-if never went false and the sheet could not be closed
+- authGate.mode === login compared a Ref to a string, so no tab ever
+  highlighted and submit() always took the login branch
+- the tab click handlers assigned authGate.mode = login, replacing the Ref
+  with a plain string and orphaning the ref openLogin() was writing to, so
+  the tabs fought each other
+
+Now a single reactive() object of plain values, so template reads and writes
+both work. Named exports delegate instead of being destructured, which would
+drop the method this-binding.
+
+Also:
+- stop click propagation on the panel so interior clicks never hit the scrim
+- Escape closes the sheet
+- reset the form every time it opens so a half-typed signup never bleeds
+  into a later login
+
+Verified by loading the real module through esbuild with the real Vue
+reactive and asserting open/mode/tab-switch/close/returnTo/effect-tracking.

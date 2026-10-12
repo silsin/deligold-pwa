@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { reactive } from 'vue'
 
 /**
  * Global login/register sheet state.
@@ -10,31 +10,49 @@ import { ref } from 'vue'
  *
  * The `returnTo` path lets a guard remember where the guest was heading so
  * the sheet can land them there after a successful sign-in.
+ *
+ * IMPORTANT: this is a `reactive()` object holding *plain values*, not an
+ * object of `ref()`. Templates read/write `authGate.mode = 'register'`
+ * directly, and only a reactive proxy unwraps and tracks that. Wrapping refs
+ * in a plain object (the previous version) leaves `authGate.open` truthy as
+ * a Ref object and silently breaks every binding here.
  */
-const open = ref(false)
-const mode = ref('login')
-const returnTo = ref(null)
+export const authGate = reactive({
+  open: false,
+  mode: 'login',
+  returnTo: null,
 
-/** Raise the sheet. `preferred` is the tab to open on. */
-function openLogin(preferred = 'login', backTo = null) {
-  mode.value = preferred === 'register' ? 'register' : 'login'
-  returnTo.value = backTo
-  open.value = true
-}
+  /** Raise the sheet. `preferred` is the tab to open on. */
+  openLogin(preferred = 'login', backTo = null) {
+    this.mode = preferred === 'register' ? 'register' : 'login'
+    this.returnTo = backTo
+    this.open = true
+  },
 
-function closeLogin() {
-  open.value = false
-  returnTo.value = null
-}
+  closeLogin() {
+    this.open = false
+    this.returnTo = null
+  },
 
-/** Called after a successful login/register — hands back the pending path. */
-function consumeReturnTo() {
-  const target = returnTo.value
-  returnTo.value = null
-  return target
-}
-
-export const authGate = { open, mode, returnTo, openLogin, closeLogin, consumeReturnTo }
+  /** Called after a successful login/register — hands back the pending path. */
+  consumeReturnTo() {
+    const target = this.returnTo
+    this.returnTo = null
+    return target
+  }
+})
 
 // Named exports too, so callers can import just what they use.
-export { open, mode, returnTo, openLogin, closeLogin, consumeReturnTo }
+// These are wrapper functions on purpose — destructuring a method off a reactive
+// proxy drops its `this`, so `openLogin`/`closeLogin` must delegate instead.
+export function openLogin(preferred = 'login', backTo = null) {
+  return authGate.openLogin(preferred, backTo)
+}
+
+export function closeLogin() {
+  return authGate.closeLogin()
+}
+
+export function consumeReturnTo() {
+  return authGate.consumeReturnTo()
+}
