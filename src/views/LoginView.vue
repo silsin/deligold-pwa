@@ -104,7 +104,10 @@ async function submit() {
     : await auth.login(phone.value.trim(), password.value)
   if (ok) {
     password.value = ''
-    router.push('/')
+    // A guarded route that bounced us here takes priority; otherwise send the
+    // user to their role's home (staff → /review, customer → board).
+    const redirect = router.currentRoute.value.query.redirect
+    router.push(typeof redirect === 'string' && redirect.startsWith('/') ? redirect : auth.homeRoute)
   }
 }
 

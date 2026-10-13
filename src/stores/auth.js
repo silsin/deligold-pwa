@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { api, setToken, getToken } from '../utils/api.js';
+import { CAPABILITIES, ROLES, can, isStaffRole, homeRouteFor } from '../utils/roles.js';
 
 /**
  * Session store for the PWA (NestJS delly-api).
@@ -27,7 +28,32 @@ export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = computed(() => Boolean(token.value));
   const balance = computed(() => Number(wallet.value?.balance ?? 0));
   const isVerified = computed(() => user.value?.verified === true);
-  const isStaff = computed(() => ['BROKER_MANAGER', 'BROKER_ADMIN', 'SUPER_ADMIN'].includes(user.value?.role));
+
+  // ── Roles / capabilities (see utils/roles.js) ─────────────────────────────
+  const role = computed(() => user.value?.role ?? ROLES.CUSTOMER);
+  const isCustomer = computed(() => role.value === ROLES.CUSTOMER);
+  const isBrokerManager = computed(() => role.value === ROLES.BROKER_MANAGER);
+  const isBrokerAdmin = computed(() => role.value === ROLES.BROKER_ADMIN);
+  const isSuperAdmin = computed(() => role.value === ROLES.SUPER_ADMIN);
+  const isStaff = computed(() => isStaffRole(role.value));
+  const canReviewOrders = computed(() => can(role.value, CAPABILITIES.REVIEW_ORDERS));
+  const canViewStores = computed(() => can(role.value, CAPABILITIES.VIEW_STORES));
+  const canViewReports = computed(() => can(role.value, CAPABILITIES.VIEW_REPORTS));
+
+  /**
+   * Resolve the signed-in user before a role-gated route renders. On a hard
+   * refresh the token exists but `user` (and thus the role) is still null, so
+   * the router guard awaits this first. A failed profile fetch logs out, which
+   * makes `isAuthenticated` false and sends the visitor to /login.
+   */
+  async function ensureSession() {
+    if (!token.value) return false;
+    if (user.value) return true;
+    return fetchProfile();
+  }
+
+  /** Where to land the current role right after sign-in. */
+  const homeRoute = computed(() => homeRouteFor(role.value));
 
   /** A symbol the user currently holds, or null. */
   function positionOf(symbol) {
@@ -100,7 +126,12 @@ export const useAuthStore = defineStore('auth', () => {
     if (!token.value) return false;
     try {
       const me = await api.get('/users/me');
-      if (me?.id) user.value = me;
+      if (me?.id) {
+        // Keep the role from the login response if `/users/me` ever omits it.
+        const merged = { ...me };
+        if (merged.role == null && user.value?.role) merged.role = user.value.role;
+        user.value = merged;
+      }
       const check = await api.get('/users/me/check');
       profileCheck.value = check;
       if (typeof check?.verified === 'boolean' && user.value) {
@@ -164,6 +195,106 @@ export const useAuthStore = defineStore('auth', () => {
       error.value = e.message || 'دریافت سفارش‌ها ناموفق بود';
       return false;
     }
+  }
+
+  // ── Two-step charge flow (request → complete) ────────────────────────────
+  // A charge starts as a PENDING request the user can resume later; the money
+  // is only actually requested from the API at completion (send receipt, or
+  // connect to the bank gateway). Pending requests are tracked locally so they
+  // survive a refresh and stay tappable on the wallet screen.
+  const PENDING_DEPOSITS_KEY = 'dg_pending_deposits';
+  const pendingDeposits = ref(loadPendingDeposits());
+
+  function loadPendingDeposits() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(PENDING_DEPOSITS_KEY));
+      return Array.isArray(raw) ? raw : [];
+    } catch {
+      return [];
+    }
+  }
+  function savePendingDeposits() {
+    try { localStorage.setItem(PENDING_DEPOSITS_KEY, JSON.stringify(pendingDeposits.value)); }
+    catch { /* storage unavailable — pending list just won't survive a reload */ }
+  }
+
+  /** Step 1 — record a charge request as PENDING (does NOT credit the wallet). */
+  async function createDeposit({ amount, method, reference = '', note = '' }) {
+    error.value = '';
+    const record = {
+      id: `dep_${Date.now()}`,
+      amount: Number(amount) || 0,
+      method: method || 'BANK_TRANSFER',
+      reference,
+      note,
+      status: 'PENDING',
+      createdAt: Date.now(),
+      gateway: null
+    };
+    pendingDeposits.value.unshift(record);
+    savePendingDeposits();
+    return { ok: true, deposit: record };
+  }
+
+  /** Upload a receipt file and return its stored path (best-effort). */
+  async function uploadReceipt(file) {
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const up = await api.post('/uploads', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+      return up?.path ?? up?.url ?? up?.filePath ?? up?.file?.path ?? '';
+    } catch (e) {
+      error.value = e.message || 'بارگذاری رسید ناموفق بود';
+      return '';
+    }
+  }
+
+  /** Step 2 (manual) — attach receipt + tracking, then submit the real charge. */
+  async function completeDeposit(id, { reference = '', receiptPath = '', note = '' }) {
+    const rec = pendingDeposits.value.find(d => d.id === id);
+    loading.value = true;
+    error.value = '';
+    try {
+      const noteParts = [];
+      if (note) noteParts.push(note);
+      if (rec?.note) noteParts.push(rec.note);
+      if (receiptPath) noteParts.push(`رسید: ${receiptPath}`);
+      await api.post('/wallet/deposits', {
+        amount: rec?.amount ?? 0,
+        method: rec?.method ?? 'BANK_TRANSFER',
+        reference: reference || rec?.reference || '',
+        note: noteParts.join(' · ')
+      });
+      pendingDeposits.value = pendingDeposits.value.filter(d => d.id !== id);
+      savePendingDeposits();
+      await fetchWallet();
+      return { ok: true };
+    } catch (e) {
+      error.value = e.message || 'ثبت واریز ناموفق بود';
+      return { ok: false, error: error.value };
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  /** Step 2 (gateway) — open the bank connection; redirect only if API gives a URL. */
+  async function connectDeposit(id) {
+    const rec = pendingDeposits.value.find(d => d.id === id);
+    const redirectUrl = rec?.gateway?.redirectUrl ?? null;
+    if (redirectUrl) {
+      window.location.href = redirectUrl;
+      return { ok: true, redirect: true };
+    }
+    // No gateway URL available yet — keep it pending so the user can retry
+    // once the backend provides a checkout URL. We never credit here.
+    error.value = 'اتصال به درگاه بانکی در حال حاضر فعال نیست';
+    return { ok: false, error: error.value };
+  }
+
+  /** Drop a pending request the user no longer wants. */
+  function cancelDeposit(id) {
+    pendingDeposits.value = pendingDeposits.value.filter(d => d.id !== id);
+    savePendingDeposits();
   }
 
   const requestDeposit = async (amount, method = 'BANK_TRANSFER', reference = '', note = '') => {
@@ -318,14 +449,31 @@ export const useAuthStore = defineStore('auth', () => {
     isLoggedIn,
     isAuthenticated,
     isVerified,
+    role,
+    isCustomer,
+    isBrokerManager,
+    isBrokerAdmin,
+    isSuperAdmin,
     isStaff,
+    canReviewOrders,
+    canViewStores,
+    canViewReports,
+    homeRoute,
     balance,
     positionOf,
     register,
     login,
     fetchAccount,
     fetchProfile,
+    ensureSession,
     updateProfile,
+    pendingDeposits,
+    createDeposit,
+    uploadReceipt,
+    completeDeposit,
+    connectDeposit,
+    cancelDeposit,
+    requestDeposit,
     fetchWallet,
     fetchPositions,
     fetchOrders,

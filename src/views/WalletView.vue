@@ -126,6 +126,33 @@
         </ul>
       </section>
 
+      <!-- Pending charge requests (resume: send receipt / connect bank) ─────── -->
+      <section v-if="pending.length" class="block">
+        <h2 class="block__title">
+          <span class="material-icons">pending_actions</span> درخواست‌های در انتظار
+        </h2>
+        <ul class="pend">
+          <li v-for="d in pending" :key="d.id" class="pend__item">
+            <div class="pend__main">
+              <b class="tnum">{{ faMoney(d.amount) }}</b>
+              <small class="muted">{{ methodName(d.method) }} · {{ faAgo(d.createdAt) }}</small>
+            </div>
+            <div class="pend__side">
+              <button type="button" class="pend__pay" @click="openPay(d)">ادامه پرداخت</button>
+              <button
+                type="button"
+                class="pend__x material-icons"
+                title="لغو درخواست"
+                aria-label="لغو درخواست"
+                @click="dropPending(d.id)"
+              >
+                close
+              </button>
+            </div>
+          </li>
+        </ul>
+      </section>
+
       <!-- Statement ────────────────────────────────────────────────────────── -->
       <section class="block">
         <h2 class="block__title">
@@ -183,6 +210,13 @@
       @close="panel = ''"
       @submit="doConvert"
     />
+    <DepositPaySheet
+      v-if="payDeposit"
+      :deposit="payDeposit"
+      :busy="auth.loading"
+      @close="closePay"
+      @done="onPaid"
+    />
   </div>
 </template>
 
@@ -195,6 +229,7 @@ import {
   faDelta,
   faPercent,
   faWeight,
+  faAgo,
   faTxAmount,
   faTxKind,
   faJalaliDateTime,
@@ -203,6 +238,7 @@ import {
   toFa
 } from '../utils/format'
 import DepositSheet from '../components/wallet/DepositSheet.vue'
+import DepositPaySheet from '../components/wallet/DepositPaySheet.vue'
 import WithdrawSheet from '../components/wallet/WithdrawSheet.vue'
 import ConvertSheet from '../components/wallet/ConvertSheet.vue'
 
@@ -212,6 +248,10 @@ const market = useMarketStore()
 const panel = ref('')
 const convertFrom = ref('')
 const refreshing = ref(false)
+const payDeposit = ref(null)
+
+/** Pending charge requests the user can resume (send receipt / connect bank). */
+const pending = computed(() => auth.pendingDeposits)
 
 /** Positions the user actually holds, largest first so the list is stable. */
 const holdings = computed(() =>
@@ -240,6 +280,14 @@ const symbolOptions = computed(() =>
 const metaOf = symbol => market.symbols.find(s => s.symbol === symbol)
 const nameOf = symbol => metaOf(symbol)?.name ?? symbol ?? '—'
 const unitOf = symbol => metaOf(symbol)?.unit ?? 'گرم'
+
+/** Persian label for a deposit method (shared with the deposit/pay sheets). */
+const DEPOSIT_METHODS = {
+  BANK_TRANSFER: 'کارت به کارت',
+  CARD: 'درگاه بانکی',
+  CRYPTO: 'رمزارز'
+}
+const methodName = method => DEPOSIT_METHODS[method] ?? 'واریز'
 
 /**
  * Coins are counted per piece, gold is weighed — so pick the glyph by the
@@ -271,10 +319,29 @@ async function refresh() {
   }
 }
 
-async function doDeposit(amount) {
-  // Store signature: requestDeposit(amount, method, reference, note).
-  const { ok } = await auth.requestDeposit(amount, 'BANK_TRANSFER', '', '')
-  if (ok) panel.value = ''
+async function doDeposit({ amount, method, reference, note }) {
+  // Step 1: record the charge as a PENDING request (no money moves yet),
+  // then open the pay sheet to send the receipt / connect to the bank.
+  const { ok, deposit } = await auth.createDeposit({ amount, method, reference, note })
+  panel.value = ''
+  if (ok) payDeposit.value = deposit
+}
+
+function openPay(deposit) {
+  payDeposit.value = deposit
+}
+
+function closePay() {
+  payDeposit.value = null
+}
+
+function onPaid() {
+  payDeposit.value = null
+  void refresh()
+}
+
+function dropPending(id) {
+  auth.cancelDeposit(id)
 }
 
 async function doWithdraw({ amount, note }) {
