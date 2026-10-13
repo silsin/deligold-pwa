@@ -130,23 +130,24 @@
       <section v-if="pending.length" class="block">
         <h2 class="block__title">
           <span class="material-icons">pending_actions</span> درخواست‌های در انتظار
+          <span class="count">{{ toFa(pending.length) }}</span>
         </h2>
         <ul class="pend">
           <li v-for="d in pending" :key="d.id" class="pend__item">
-            <div class="pend__main">
+            <div class="pend__top">
               <b class="tnum">{{ faMoney(d.amount) }}</b>
-              <small class="muted">{{ methodName(d.method) }} · {{ faAgo(d.createdAt) }}</small>
+              <span class="pend__method">{{ methodName(d.method) }}</span>
             </div>
-            <div class="pend__side">
+            <small class="pend__meta">{{ faAgo(d.createdAt) }}</small>
+            <div class="pend__actions">
               <button type="button" class="pend__pay" @click="openPay(d)">ادامه پرداخت</button>
               <button
                 type="button"
-                class="pend__x material-icons"
-                title="لغو درخواست"
+                class="pend__drop"
                 aria-label="لغو درخواست"
                 @click="dropPending(d.id)"
               >
-                close
+                لغو
               </button>
             </div>
           </li>
@@ -738,6 +739,79 @@ onUnmounted(() => {
 
 .tx__side small {
   font-size: 10px;
+}
+
+/* ── Pending charge requests ─────────────────────────────────────────────── */
+.pend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pend__item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 13px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  border-inline-start: 3px solid #d99a00;
+  background: var(--card);
+}
+
+.pend__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.pend__top b {
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.pend__method {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  font-size: 10.5px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.pend__meta {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.pend__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.pend__pay {
+  flex: 1;
+  padding: 10px;
+  border-radius: 11px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.pend__drop {
+  padding: 10px 14px;
+  border-radius: 11px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 /* ── Empty states ────────────────────────────────────────────────────────── */
