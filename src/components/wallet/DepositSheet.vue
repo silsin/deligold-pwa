@@ -10,7 +10,28 @@
         </button>
       </div>
 
-      <p class="sheet__hint">مبلغ را به تومان وارد کنید. سقف هر واریز ۵۰۰ میلیون تومان است.</p>
+      <span class="field__label">روش شارژ</span>
+      <div class="methods" role="radiogroup" aria-label="روش شارژ">
+        <button
+          v-for="m in METHODS"
+          :key="m.value"
+          type="button"
+          class="method"
+          :class="{ 'is-on': method === m.value }"
+          :disabled="busy"
+          @click="method = m.value"
+        >
+          <i class="material-icons">{{ m.icon }}</i>
+          {{ m.label }}
+        </button>
+      </div>
+
+      <p v-if="isManual" class="sheet__hint">
+        مبلغ را به حساب رسمی واریز کنید، سپس شماره پیگیری تراکنش را وارد نمایید.
+      </p>
+      <p v-else class="sheet__hint">
+        پس از ثبت درخواست، برای پرداخت امن به درگاه بانکی منتقل می‌شوید.
+      </p>
 
       <label class="field">
         <span class="field__label">مبلغ (تومان)</span>
@@ -41,12 +62,53 @@
         </button>
       </div>
 
+      <!-- Tracking code — required for manual transfer methods -->
+      <label v-if="isManual" class="field field--gap">
+        <span class="field__label">شماره پیگیری تراکنش</span>
+        <input
+          v-model="reference"
+          class="field__input field__input--sm"
+          type="text"
+          inputmode="numeric"
+          autocomplete="off"
+          maxlength="32"
+          placeholder="مثلاً ۱۲۳۴۵۶۷۸۹"
+          :disabled="busy"
+        />
+      </label>
+
+      <!-- Optional receipt image for manual methods -->
+      <div v-if="isManual" class="upload">
+        <label class="upload__btn" :class="{ 'is-done': receiptPath }">
+          <span class="material-icons">{{ receiptPath ? 'check_circle' : 'add_a_photo' }}</span>
+          {{ uploading ? 'در حال بارگذاری…' : receiptPath ? 'رسید بارگذاری شد' : 'بارگذاری تصویر رسید (اختیاری)' }}
+          <input type="file" accept="image/*,.pdf" :disabled="busy || uploading" @change="onReceipt" />
+        </label>
+        <small v-if="receiptName" class="upload__name">{{ receiptName }}</small>
+      </div>
+
+      <label class="field field--gap">
+        <span class="field__label">توضیح (اختیاری)</span>
+        <input
+          v-model="note"
+          class="field__input field__input--sm"
+          type="text"
+          maxlength="80"
+          placeholder="مثلاً: واریز از حساب مشترک"
+          :disabled="busy"
+        />
+      </label>
+
       <p v-if="error" class="sheet__err" role="alert">{{ error }}</p>
 
       <button type="submit" class="sheet__cta" :disabled="!valid || busy">
         <span v-if="busy" class="spin" aria-hidden="true"></span>
         {{ busy ? 'در حال ثبت…' : 'تأیید و واریز' }}
       </button>
+
+      <p class="sheet__fine">
+        درخواست واریز پس از تأیید کارشناس به موجودی نقد شما افزوده می‌شود.
+      </p>
     </form>
   </div>
 </template>
@@ -54,19 +116,45 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { faMoney, faCompact, toFa } from '../../utils/format'
+import { api } from '../../utils/api.js'
 
 const props = defineProps({ busy: { type: Boolean, default: false } })
 const emit = defineEmits(['close', 'submit'])
 
 /** Step-down sizes, so the row doubles as a rough size ladder. */
 const PRESETS = [500_000_000, 200_000_000, 100_000_000, 50_000_000, 10_000_000]
-
 const CEILING = 500_000_000
+
+/**
+ * Supported charge methods. `manual` ones require a tracking code and offer a
+ * receipt upload; the gateway one is handled by the backend redirect.
+ * NOTE: these values are sent verbatim to POST /wallet/deposits — keep them in
+ * sync with the backend's accepted `method` enum (only BANK_TRANSFER is
+ * confirmed to work today).
+ */
+const METHODS = [
+  { value: 'BANK_TRANSFER', label: 'کارت به کارت', icon: 'credit_card', manual: true },
+  { value: 'CARD', label: 'درگاه بانکی', icon: 'account_balance', manual: false },
+  { value: 'CRYPTO', label: 'رمزارز', icon: 'currency_bitcoin', manual: true }
+]
+
+const method = ref('BANK_TRANSFER')
+const isManual = computed(() => METHODS.find(m => m.value === method.value)?.manual === true)
+
 const raw = ref('')
 const amount = ref(0)
+const reference = ref('')
+const note = ref('')
+const receiptPath = ref('')
+const receiptName = ref('')
+const uploading = ref(false)
 const error = ref('')
 
-const valid = computed(() => amount.value > 0 && amount.value <= CEILING)
+const valid = computed(() => {
+  if (amount.value <= 0 || amount.value > CEILING) return false
+  if (isManual.value && reference.value.trim().length < 4) return false
+  return true
+})
 
 /** Persian numerals are accepted: ۱۲۳ parses the same as 123. */
 function parseDigits(value) {
@@ -86,11 +174,47 @@ function pick(value) {
   error.value = ''
 }
 
+/** Upload the chosen receipt to /uploads, mirroring the order-receipt flow. */
+async function onReceipt(e) {
+  const file = e.target?.files?.[0]
+  if (!file) return
+  uploading.value = true
+  error.value = ''
+  try {
+    const form = new FormData()
+    form.append('file', file)
+    const up = await api.post('/uploads', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+    receiptPath.value = up?.path ?? up?.url ?? up?.filePath ?? up?.file?.path ?? ''
+    if (!receiptPath.value) error.value = 'بارگذاری رسید ناموفق بود'
+    else receiptName.value = file.name
+  } catch (err) {
+    error.value = err.message || 'بارگذاری رسید ناموفق بود'
+  } finally {
+    uploading.value = false
+  }
+}
+
 function submit() {
   if (!valid.value || props.busy) return
-  emit('submit', amount.value)
+  // Fold the uploaded receipt path into `note` — the deposit body stays within
+  // the confirmed {amount, method, reference, note} contract, no invented fields.
+  const noteParts = []
+  if (note.value.trim()) noteParts.push(note.value.trim())
+  if (receiptPath.value) noteParts.push(`رسید: ${receiptPath.value}`)
+
+  emit('submit', {
+    amount: amount.value,
+    method: method.value,
+    reference: reference.value.trim(),
+    note: noteParts.join(' · ')
+  })
+
   raw.value = ''
   amount.value = 0
+  reference.value = ''
+  note.value = ''
+  receiptPath.value = ''
+  receiptName.value = ''
   error.value = ''
 }
 </script>
@@ -245,4 +369,84 @@ function submit() {
     transform: rotate(360deg);
   }
 }
+
+/* ── Charge method selector ─────────────────────────────────────────────── */
+.methods {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.method {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 10px 6px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.method .material-icons {
+  font-size: 20px;
+}
+
+.method.is-on {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.method:disabled {
+  opacity: 0.5;
+}
+
+.field--gap {
+  margin-top: 12px;
+}
+
+/* ── Receipt upload ─────────────────────────────────────────────────────── */
+.upload {
+  margin-top: 12px;
+}
+
+.upload__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 12px;
+  border-radius: 11px;
+  border: 1px dashed var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.upload__btn.is-done {
+  border-style: solid;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.upload__btn input[type='file'] {
+  display: none;
+}
+
+.upload__name {
+  display: block;
+  margin-top: 5px;
+  font-size: 10.5px;
+  color: var(--text-muted);
+  text-align: center;
+  word-break: break-all;
+}
+
 </style>

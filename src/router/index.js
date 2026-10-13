@@ -10,11 +10,18 @@ import SettingsView from '../views/SettingsView.vue'
 import ReviewQueueView from '../views/ReviewQueueView.vue'
 import { authGate } from '../utils/authGate'
 import { useAuthStore } from '../stores/auth'
+import CatalogView from '../views/CatalogView.vue'
+import ReportsView from '../views/ReportsView.vue'
+import ForbiddenView from '../views/ForbiddenView.vue'
+import { STAFF_ROLES, ADMIN_ROLES } from '../utils/roles'
 
 /**
  * Live gold/silver trading app. Home is the price board (خرید/فروش quotes),
  * then the per-symbol trading desk, markets list, portfolio, history, account
  * and settings — the exact set the top bar + bottom tab bar navigate to.
+ *
+ * Staff screens (order review, stores, reports) live behind the same router but
+ * are guarded by `meta.roles` — see the `beforeEach` below.
  *
  * Hash history keeps the PWA working from any sub-path or static host without
  * server rewrites — important because `dist/` is usually served as plain files.
@@ -22,9 +29,6 @@ import { useAuthStore } from '../stores/auth'
  * There is no `/login` route: login is a bottom sheet (LoginSheet, driven by
  * utils/authGate), raised from the tab bar, the drawer or this guard.
  */
-
-/** True only for the signed-in account experience. */
-const RESTRICTED = ['trade', 'portfolio', 'history', 'account', 'wallet', 'review']
 
 const routes = [
   // Home = the live price board.
@@ -42,7 +46,14 @@ const routes = [
   // Cash wallet: deposits, withdrawals and gold-to-gold conversion.
   { path: '/wallet', name: 'wallet', component: WalletView, meta: { title: 'کیف پول', requiresAuth: true } },
   { path: '/settings', name: 'settings', component: SettingsView, meta: { title: 'تنظیمات' } },
-  { path: '/review', name: 'review', component: ReviewQueueView, meta: { title: 'صف بررسی', requiresAuth: true } },
+  // Staff review queue — every staff role.
+  { path: '/review', name: 'review', component: ReviewQueueView, meta: { title: 'صف بررسی', requiresAuth: true, roles: STAFF_ROLES } },
+  // Wholesale stores + their movements — every staff role.
+  { path: '/stores', name: 'stores', component: CatalogView, meta: { title: 'فروشگاه‌ها', requiresAuth: true, roles: STAFF_ROLES } },
+  // Financial reports (trial balance, trades) — admins and above.
+  { path: '/reports', name: 'reports', component: ReportsView, meta: { title: 'گزارش‌ها', requiresAuth: true, roles: ADMIN_ROLES } },
+  // Shown when an authenticated user lacks the role for a route.
+  { path: '/forbidden', name: 'forbidden', component: ForbiddenView, meta: { title: 'دسترسی ندارید', requiresAuth: true } },
   // Unknown path → the board, never a blank screen.
   { path: '/:pathMatch(.*)*', redirect: '/' }
 ]
@@ -54,17 +65,46 @@ const router = createRouter({
 })
 
 /**
- * Guests are bounced off the account experience and handed to the login sheet,
- * which then returns them to where they were headed.
+ * Session + RBAC guard.
+ *
+ * Two layers, on top of main's bottom-sheet login:
+ *   1. Resolve the signed-in user/role when a token exists but the profile
+ *      hasn't loaded yet (fresh page load / deep link) — the role lives on the
+ *      profile, so this must happen before any role check.
+ *   2. Role gate (`meta.roles`): a signed-in user without a listed role is sent
+ *      to /forbidden.
+ *
+ * Guests on restricted routes are still handed to the login bottom sheet
+ * (authGate), which returns them to where they were headed.
  */
-router.beforeEach(to => {
-  const restricted = RESTRICTED.includes(to.name) && to.meta?.requiresAuth
-  if (!restricted) return true
-  if (useAuthStore().isLoggedIn) return true
+router.beforeEach(async to => {
+  const auth = useAuthStore()
 
-  authGate.openLogin('login', to.fullPath)
-  return { name: 'board' }
+  // Resolve role before checking it.
+  if (auth.token && !auth.user) {
+    await auth.ensureSession()
+  }
+
+  const roles = to.meta?.roles
+
+  // Role gate — authenticated but wrong role.
+  if (roles && roles.length && auth.isLoggedIn && !roles.includes(auth.role)) {
+    return { name: 'forbidden' }
+  }
+
+  // Guests are bounced off the account experience and handed to the login sheet,
+  // which then returns them to where they were headed. Gated on the route's own
+  // meta (requiresAuth, or any roles) instead of a hand-kept list, so a new
+  // protected route can't be accidentally left open to guests.
+  const needsAuth = to.meta?.requiresAuth || (roles && roles.length)
+  if (needsAuth && !auth.isLoggedIn) {
+    authGate.openLogin('login', to.fullPath)
+    return { name: 'board' }
+  }
+
+  return true
 })
+
 
 router.afterEach(to => {
   document.title = to.meta?.title ? `دلی گلد | ${to.meta.title}` : 'دلی گلد'

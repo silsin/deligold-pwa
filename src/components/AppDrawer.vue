@@ -62,6 +62,24 @@
           <button type="button" class="drawer__item" @click="showTerms = true">
             <i class="material-icons">policy</i> شرایط و قوانین
           </button>
+
+          <template v-if="auth.isStaff">
+            <div class="drawer__divider" />
+            <div class="drawer__group">
+              <span class="drawer__group-title">مدیریت</span>
+              <small v-if="roleLabel" class="drawer__role">{{ roleLabel }}</small>
+            </div>
+            <button type="button" class="drawer__item" @click="go('/review')">
+              <i class="material-icons">fact_check</i> صف بررسی
+            </button>
+            <button v-if="auth.canViewStores" type="button" class="drawer__item" @click="go('/stores')">
+              <i class="material-icons">storefront</i> فروشگاه‌ها
+            </button>
+            <button v-if="auth.canViewReports" type="button" class="drawer__item" @click="go('/reports')">
+              <i class="material-icons">assessment</i> گزارش‌ها
+            </button>
+          </template>
+
           <button v-if="auth.isLoggedIn" type="button" class="drawer__item drawer__item--out" @click="logout">
             <i class="material-icons">logout</i> خروج از حساب
           </button>
@@ -79,9 +97,10 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { ROLE_LABELS } from '../utils/roles'
 import TermsModal from './TermsModal.vue'
 import { applyPalette, loadPaletteId, savePaletteId, DEFAULT_PALETTE_ID } from '../theme'
 
@@ -92,6 +111,7 @@ const router = useRouter()
 const auth = useAuthStore()
 const showTerms = ref(false)
 const isDark = ref(loadPaletteId() !== 'light' && loadPaletteId() !== 'cream-light')
+const roleLabel = computed(() => ROLE_LABELS[auth.role] ?? '')
 
 function go(path) {
   emit('close')
@@ -259,6 +279,35 @@ function toggleTheme() {
   background: color-mix(in srgb, var(--accent) 16%, transparent);
   border: 1px solid var(--accent);
   color: var(--accent);
+}
+
+.drawer__divider {
+  height: 1px;
+  margin: 8px 6px;
+  background: var(--border);
+}
+
+.drawer__group {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px 2px;
+}
+
+.drawer__group-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+}
+
+.drawer__role {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 15%, var(--card));
+  color: var(--accent);
+  font-size: 10px;
   font-weight: 800;
 }
 
