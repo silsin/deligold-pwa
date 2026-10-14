@@ -199,8 +199,14 @@ export const useAuthStore = defineStore('auth', () => {
       }
       return true;
     } catch (e) {
-      logout();
-      error.value = e.message || 'نشست منقضی شده است';
+      // Only a real 401 means the token is dead. A timeout / 500 / offline
+      // hiccup must NOT log the user out — keep the token and retry later.
+      if (e?.isUnauthorized) {
+        logout();
+        error.value = e.message || 'نشست منقضی شده است';
+      } else {
+        error.value = e.message || 'دریافت پروفایل ناموفق بود';
+      }
       return false;
     }
   }

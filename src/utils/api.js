@@ -50,11 +50,16 @@ api.interceptors.request.use(config => {
 api.interceptors.response.use(
   response => response.data?.data ?? response.data,
   err => {
+    const status = err?.response?.status
     const message =
       err?.response?.data?.error ||
       (err?.code === 'ECONNABORTED' ? 'پاسخی از سرور دریافت نشد (تایم‌اوت)' : null) ||
       err?.message ||
       'خطای نامشخص در ارتباط با سرور'
-    return Promise.reject(new Error(message))
+    const error = new Error(message)
+    // Tag auth failures so stores can tell "token is dead" apart from
+    // "server unreachable" — only the former should clear the session.
+    if (status === 401) error.isUnauthorized = true
+    return Promise.reject(error)
   }
 )

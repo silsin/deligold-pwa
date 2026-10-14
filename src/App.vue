@@ -108,6 +108,13 @@ onMounted(() => {
   showTerms.value = !termsAccepted()
   tick()
   timer = setInterval(tick, 1000)
+  // Restore the persisted session: a stored token means "still logged in".
+  // Without this the guard sees an empty user and every reopen looks logged out
+  // until something happens to fetch the profile.
+  if (auth.token && !auth.user) {
+    void auth.ensureSession()
+  }
+  if (auth.isLoggedIn) void auth.fetchAccount()
 })
 
 onBeforeUnmount(() => {
