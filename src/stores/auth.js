@@ -271,6 +271,73 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  // ── Staff: user directory + role grants ──────────────────────────────────
+  // Powers the super-admin "کاربران" screen. The API scopes `GET /users` by
+  // broker (super-admin sees everyone), and guards every grant — the UI just
+  // surfaces the error message when the server says no.
+  const directory = ref([]);
+
+  function applyDirectory(data) {
+    const list = Array.isArray(data) ? data : data?.users ?? data?.items ?? [];
+    if (Array.isArray(list)) directory.value = list;
+  }
+
+  async function fetchDirectory(params = {}) {
+    if (!token.value) return false;
+    loading.value = true;
+    error.value = '';
+    try {
+      const query = new URLSearchParams();
+      if (params.search) query.set('search', params.search);
+      if (params.role) query.set('role', params.role);
+      if (params.limit) query.set('limit', String(params.limit));
+      const qs = query.toString();
+      applyDirectory(await api.get(qs ? `/users?${qs}` : '/users'));
+      return true;
+    } catch (e) {
+      error.value = e.message || 'دریافت فهرست کاربران ناموفق بود';
+      return false;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  async function changeUserRole(userId, role, note = '') {
+    if (!token.value) return { ok: false };
+    loading.value = true;
+    error.value = '';
+    try {
+      const updated = await api.post(`/users/${userId}/role`, { role, note: note || undefined });
+      const idx = directory.value.findIndex(u => u?.id === userId);
+      if (idx >= 0 && updated?.id) directory.value[idx] = { ...directory.value[idx], ...updated };
+      // A changed user may already be signed in — refresh our own profile so
+      // the drawer/role gates update without a manual reload.
+      if (user.value?.id === userId) await fetchProfile();
+      return { ok: true, user: updated };
+    } catch (e) {
+      error.value = e.message || 'تغییر نقش ناموفق بود';
+      return { ok: false, error: error.value };
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  async function createStaffUser(payload) {
+    if (!token.value) return { ok: false };
+    loading.value = true;
+    error.value = '';
+    try {
+      const created = await api.post('/users', payload);
+      if (created?.id) directory.value = [created, ...directory.value];
+      return { ok: true, user: created };
+    } catch (e) {
+      error.value = e.message || 'ایجاد کاربر ناموفق بود';
+      return { ok: false, error: error.value };
+    } finally {
+      loading.value = false;
+    }
+  }
+
   // ── Two-step charge flow (request → complete) ────────────────────────────
   // A charge starts as a PENDING request the user can resume later; the money
   // is only actually requested from the API at completion (send receipt, or
@@ -565,6 +632,10 @@ export const useAuthStore = defineStore('auth', () => {
     reviewQueue,
     reviewOrder,
     fulfillOrder,
+    directory,
+    fetchDirectory,
+    changeUserRole,
+    createStaffUser,
     logout,
   };
 });

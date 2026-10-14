@@ -1,5 +1,7 @@
 /**
- * Seeds the platform chart of accounts plus one broker with its own copy.
+ * Seeds the platform chart of accounts plus one broker with its own copy,
+ * plus the initial SUPER_ADMIN login from env (temporary credentials the
+ * operator rotates after first sign-in).
  *
  * Run once per fresh database:
  *
@@ -9,6 +11,7 @@
  * than a duplicate-account disaster.
  */
 import { PrismaClient, Prisma } from '@prisma/client';
+import * as bcrypt from 'bcryptjs';
 import { TRADE_SYMBOLS } from './market/symbols';
 import { ACCOUNTS } from './accounting/accounts.service';
 
@@ -78,7 +81,66 @@ async function main() {
   const book = await seedBook(broker.id);
   console.log(`broker ${broker.slug} accounts: ${book}`);
 
+  await seedSuperAdmin();
+
   console.log('seed done');
+}
+
+/**
+ * Initial SUPER_ADMIN login, so the platform is operable from a fresh DB.
+ *
+ * Credentials come from env — never hard-coded:
+ *
+ *   SEED_ADMIN_PHONE=09120000000 SEED_ADMIN_PASSWORD=ChangeMe123! npx ts-node src/seed.ts
+ *
+ * Upserted by phone: re-running with the same phone keeps the existing role
+ * but refreshes the password (handy for lockout recovery). Skipped silently
+ * when the env vars are absent, so plain account-seeding stays untouched.
+ */
+async function seedSuperAdmin(): Promise<void> {
+  const phone = process.env.SEED_ADMIN_PHONE?.trim();
+  const password = process.env.SEED_ADMIN_PASSWORD ?? '';
+  if (!phone) {
+    console.log('seed super-admin: skipped (SEED_ADMIN_PHONE not set)');
+    return;
+  }
+  if (password.length < 6) {
+    throw new Error('SEED_ADMIN_PASSWORD must be at least 6 characters');
+  }
+
+  const hash = await bcrypt.hash(password, 10);
+  const existing = await prisma.user.findFirst({ where: { phone } });
+  if (existing) {
+    await prisma.user.update({
+      where: { id: existing.id },
+      data: {
+        password: hash,
+        role: 'SUPER_ADMIN',
+        status: 'ACTIVE',
+        brokerId: null,
+        name: existing.name?.trim() ? existing.name : 'مدیر سیستم',
+      },
+    });
+    console.log(`seed super-admin: refreshed ${phone} (SUPER_ADMIN)`);
+    return;
+  }
+
+  const created = await prisma.user.create({
+    data: {
+      phone,
+      name: 'مدیر سیستم',
+      password: hash,
+      role: 'SUPER_ADMIN',
+      status: 'ACTIVE',
+      brokerId: null,
+    },
+  });
+  await prisma.wallet.upsert({
+    where: { userId: created.id },
+    create: { userId: created.id },
+    update: {},
+  });
+  console.log(`seed super-admin: created ${phone} (SUPER_ADMIN)`);
 }
 
 main()

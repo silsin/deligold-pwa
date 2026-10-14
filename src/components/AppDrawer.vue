@@ -78,6 +78,9 @@
             <button v-if="auth.canViewReports" type="button" class="drawer__item" @click="go('/reports')">
               <i class="material-icons">assessment</i> گزارش‌ها
             </button>
+            <button v-if="auth.isSuperAdmin" type="button" class="drawer__item" @click="go('/users')">
+              <i class="material-icons">group</i> کاربران
+            </button>
           </template>
 
           <button v-if="auth.isLoggedIn" type="button" class="drawer__item drawer__item--out" @click="logout">
