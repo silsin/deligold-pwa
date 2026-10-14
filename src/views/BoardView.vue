@@ -9,38 +9,6 @@
       @select="openTrade"
     />
 
-    <!-- Hero: the featured symbol, big and calm, with its sparkline. -->
-    <section class="hero">
-      <div class="hero__top">
-        <button type="button" class="hero__symbol" @click="openTrade(heroSymbol)">
-          <span class="hero__name">{{ heroMeta?.name ?? '…' }}</span>
-          <span class="hero__sub">{{ heroMeta?.short }} · {{ heroMeta?.unit }}</span>
-        </button>
-        <span class="hero__badge" :class="market.isUp ? 'is-up' : 'is-down'">
-          <i class="material-icons">{{ market.isUp ? 'trending_up' : 'trending_down' }}</i>
-          {{ faPercent(market.changePercent) }}
-        </span>
-      </div>
-      <div class="hero__price" :class="market.isUp ? 'is-up' : 'is-down'">
-        {{ faNumber(market.price) }}<span class="hero__unit">تومان</span>
-      </div>
-      <div class="hero__stats">
-        <span class="hero__stat">
-          <i>کف</i>
-          <b>{{ faCompact(market.rangeLow) }}</b>
-        </span>
-        <span class="hero__stat">
-          <i>سقف</i>
-          <b>{{ faCompact(market.rangeHigh) }}</b>
-        </span>
-        <span class="hero__stat" :class="market.change >= 0 ? 'is-up' : 'is-down'">
-          <i>تغییر</i>
-          <b>{{ faDelta(market.change) }}</b>
-        </span>
-      </div>
-      <Sparkline class="hero__spark" :values="heroSpark" :height="46" />
-    </section>
-
     <!-- Last update strip -->
     <div class="board__update">
       <span class="board__update-label">آخرین آپدیت قیمت</span>
@@ -53,7 +21,7 @@
     <div class="board__head">
       <span class="board__head-buy">می‌خرید</span>
       <span class="board__head-name"></span>
-      <span class="board__head-sell">فروشید</span>
+      <span class="board__head-sell">میفروشید</span>
     </div>
 
     <!-- Price rows -->
@@ -151,8 +119,7 @@ import { useMarketStore } from '../stores/market'
 import { useAuthStore } from '../stores/auth'
 import TermsModal from '../components/TermsModal.vue'
 import TickerTape from '../components/TickerTape.vue'
-import Sparkline from '../components/Sparkline.vue'
-import { faMoney, faNumber, faWeight, faDelta, faPercent, faTime, faJalaliDateTime, faCompact } from '../utils/format'
+import { faMoney, faWeight, faDelta, faTime, faJalaliDateTime } from '../utils/format'
 
 const market = useMarketStore()
 const auth = useAuthStore()
@@ -162,11 +129,6 @@ const showTerms = ref(false)
 const refreshing = ref(false)
 const balanceAt = ref(Date.now())
 const marketFee = auth.feePercent || 0.5
-
-// The hero highlights 18k gold unless another symbol is already selected.
-const heroSymbol = computed(() => market.symbol || 'GOLD18')
-const heroMeta = computed(() => market.meta)
-const heroSpark = computed(() => market.stats[heroSymbol.value]?.spark ?? [])
 
 /**
  * Buy = what the customer pays (base + fee), Sell = what they receive
@@ -189,11 +151,6 @@ function sellPrice(symbol) {
 function dirClass(symbol) {
   const dir = market.direction[symbol] ?? 0
   return dir > 0 ? 'is-up' : dir < 0 ? 'is-down' : ''
-}
-
-/** Per-row sparkline series from the 24h stats (empty until history exists). */
-function sparkOf(symbol) {
-  return market.stats[symbol]?.spark ?? []
 }
 
 function openTrade(symbol) {
@@ -238,133 +195,6 @@ onBeforeUnmount(() => {
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Hero: featured symbol ── */
-.hero {
-  margin-top: 10px;
-  padding: 16px 16px 12px;
-  border-radius: 18px;
-  background: linear-gradient(180deg, var(--card) 0%, var(--surface) 100%);
-  border: 1px solid var(--border);
-  box-shadow: 0 8px 24px rgba(20, 23, 28, 0.07);
-}
-
-.hero__top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.hero__symbol {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  text-align: right;
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-}
-
-.hero__name {
-  font-size: 16px;
-  font-weight: 800;
-  color: var(--text);
-  line-height: 1.3;
-}
-
-.hero__sub {
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.hero__badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 5px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.hero__badge .material-icons {
-  font-size: 16px;
-}
-
-.hero__badge.is-up {
-  background: var(--up-soft);
-  color: var(--up);
-}
-
-.hero__badge.is-down {
-  background: var(--down-soft);
-  color: var(--down);
-}
-
-.hero__price {
-  margin-top: 12px;
-  font-size: 30px;
-  font-weight: 900;
-  line-height: 1.2;
-  letter-spacing: -0.5px;
-  text-align: right;
-}
-
-.hero__price.is-up { color: var(--up); }
-.hero__price.is-down { color: var(--down); }
-
-.hero__unit {
-  margin-right: 6px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-muted);
-}
-
-.hero__stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.hero__stat {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  padding: 8px 4px;
-  border-radius: 12px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-}
-
-.hero__stat i {
-  font-style: normal;
-  font-size: 10.5px;
-  font-weight: 700;
-  color: var(--text-muted);
-}
-
-.hero__stat b {
-  font-size: 12.5px;
-  font-weight: 800;
-  color: var(--text);
-}
-
-.hero__stat.is-up b { color: var(--up); }
-.hero__stat.is-down b { color: var(--down); }
-
-.hero__spark {
-  display: block;
-  width: 100%;
-  margin-top: 10px;
-}
-
 /* ── Last update strip ── */
 .board__update {
   display: flex;
@@ -404,12 +234,12 @@ onBeforeUnmount(() => {
 }
 
 .board__head-sell {
-  text-align: left;
+  text-align: center;
   color: var(--down);
 }
 
 .board__head-buy {
-  text-align: left;
+  text-align: center;
   color: var(--up);
 }
 

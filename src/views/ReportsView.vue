@@ -61,6 +61,13 @@
             <tr v-for="(row, r) in tradesRows" :key="r">
               <td v-for="(c, i) in tradesColumns" :key="i" class="num">{{ cellOf(row, c) }}</td>
             </tr>
+          </tbody>
+        </table>
+        <p v-else class="muted">معامله‌ای ثبت نشده است.</p>
+      </section>
+    </template>
+  </div>
+</template>
 
 <script setup>
 import { computed, onMounted } from 'vue'
@@ -213,11 +220,3 @@ onMounted(load)
 .empty--inline { padding: 30px 0; }
 .empty__text { margin: 0; font-size: 13px; color: var(--text-muted); text-align: center; }
 </style>
-
-          </tbody>
-        </table>
-        <p v-else class="muted">معامله‌ای ثبت نشده است.</p>
-      </section>
-    </template>
-  </div>
-</template>

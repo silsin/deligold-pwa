@@ -327,7 +327,7 @@ onMounted(() => { refresh() })
 .empty__text { margin: 0; font-size: 13px; color: var(--text-muted); }
 .logout { display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%; padding: 12px 0; border-radius: 12px; border: 1px solid var(--down); color: var(--down); font-size: 14px; font-weight: 800; }
 .logout .material-icons { font-size: 18px; }
-</style>
 .stat__label { font-size: 10px; color: var(--text-muted); }
 .stat__value { font-size: 12.5px; font-weight: 800; }
+</style>
 
