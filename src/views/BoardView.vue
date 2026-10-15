@@ -6,7 +6,7 @@
       :prices="market.prices"
       :stats="market.stats"
       :current="market.symbol"
-      @select="openHomeOrder"
+      @select="quickOrder"
     />
 
     <!-- Last update strip -->
@@ -37,7 +37,7 @@
             <span class="row__sub">{{ faMoney(market.prices[s.symbol]) }}</span>
           </button>
 
-          <button type="button" class="row__name" @click="openHomeOrder(s.symbol, 'BUY')">
+          <button type="button" class="row__name" @click="quickOrder(s.symbol, 'BUY')">
             <span class="row__label">{{ s.name }}</span>
           </button>
 
@@ -54,7 +54,7 @@
           type="button"
           class="row"
           :class="{ 'is-selected': market.symbol === s.symbol }"
-          @click="openHomeOrder(s.symbol, 'BUY')"
+          @click="quickOrder(s.symbol, 'BUY')"
         >
           <!-- Buy side (right in RTL layout) -->
           <span class="row__card row__card--buy" :class="dirClass(s.symbol)">
@@ -75,6 +75,11 @@
           </span>
         </button>
       </template>
+    </div>
+    <div class="board__more">
+      <button type="button" class="board__more-btn" @click="showAll = !showAll">
+        {{ showAll ? 'نمایش کمتر' : 'نمایش همه نمادها' }}
+      </button>
     </div>
     <p v-if="auth.isCustomer" class="board__note">
       برای ثبت سریع، روی قیمت خرید یا فروش بزنید · عدد کوچک: قیمت پایه بازار
@@ -196,18 +201,6 @@ function dirClass(symbol) {
   return dir > 0 ? 'is-up' : dir < 0 ? 'is-down' : ''
 }
 
-function openHomeOrder(symbol, side = 'BUY') {
-  if (!auth.isLoggedIn) {
-    openLogin('login')
-    return
-  }
-  if (!auth.isCustomer) return
-  quickSymbol.value = symbol
-  quickSide.value = side
-  quickOpen.value = true
-}
-
-/** Home buy/sell tiles — customer only. Guests get login, staff stay read-only. */
 function quickOrder(symbol, side) {
   if (!auth.isLoggedIn) {
     openLogin('login')
@@ -218,7 +211,6 @@ function quickOrder(symbol, side) {
   quickSide.value = side
   quickOpen.value = true
 }
-
 function onQuickDone() {
   balanceAt.value = Date.now()
 }
@@ -235,9 +227,10 @@ const goldEquivalent = computed(() => {
  * Guests/staff always see the full read-only board.
  */
 const boardPrefsTick = ref(0)
+const showAll = ref(false)
 const visibleRows = computed(() => {
   void boardPrefsTick.value
-  if (!auth.isLoggedIn || !auth.isCustomer) return market.symbols
+  if (showAll.value) return market.symbols
   const visible = loadVisible()
   if (visible && visible.length) {
     const set = new Set(visible)
@@ -337,6 +330,22 @@ onBeforeUnmount(() => {
 }
 
 /* ── Rows ── */
+.board__more {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.board__more-btn {
+  padding: 9px 26px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 800;
+}
+
 .board__rows {
   display: flex;
   flex-direction: column;
