@@ -9,38 +9,6 @@
       @select="openTrade"
     />
 
-    <!-- Hero: the featured symbol, big and calm, with its sparkline. -->
-    <section class="hero">
-      <div class="hero__top">
-        <button type="button" class="hero__symbol" @click="openTrade(heroSymbol)">
-          <span class="hero__name">{{ heroMeta?.name ?? '…' }}</span>
-          <span class="hero__sub">{{ heroMeta?.short }} · {{ heroMeta?.unit }}</span>
-        </button>
-        <span class="hero__badge" :class="market.isUp ? 'is-up' : 'is-down'">
-          <i class="material-icons">{{ market.isUp ? 'trending_up' : 'trending_down' }}</i>
-          {{ faPercent(market.changePercent) }}
-        </span>
-      </div>
-      <div class="hero__price" :class="market.isUp ? 'is-up' : 'is-down'">
-        {{ faNumber(market.price) }}<span class="hero__unit">تومان</span>
-      </div>
-      <div class="hero__stats">
-        <span class="hero__stat">
-          <i>کف</i>
-          <b>{{ faCompact(market.rangeLow) }}</b>
-        </span>
-        <span class="hero__stat">
-          <i>سقف</i>
-          <b>{{ faCompact(market.rangeHigh) }}</b>
-        </span>
-        <span class="hero__stat" :class="market.change >= 0 ? 'is-up' : 'is-down'">
-          <i>تغییر</i>
-          <b>{{ faDelta(market.change) }}</b>
-        </span>
-      </div>
-      <Sparkline class="hero__spark" :values="heroSpark" :height="46" />
-    </section>
-
     <!-- Last update strip -->
     <div class="board__update">
       <span class="board__update-label">آخرین آپدیت قیمت</span>
@@ -56,42 +24,68 @@
       <span class="board__head-sell">فروشید</span>
     </div>
 
-    <!-- Price rows -->
+    <!-- Price rows.
+      Customer: buy/sell tiles are order actions (open the quick sheet).
+      Everyone else (guest/staff): the whole block is a read-only price tile. -->
     <div class="board__rows">
-      <button
-        v-for="s in market.symbols"
-        :key="s.symbol"
-        type="button"
-        class="row"
-        :class="{ 'is-selected': market.symbol === s.symbol }"
-        @click="openTrade(s.symbol)"
-      >
-        <!-- Buy side (right in RTL layout) -->
-        <span class="row__card row__card--buy" :class="dirClass(s.symbol)">
-          <i v-if="market.direction[s.symbol]" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
-          <span class="row__price">{{ faMoney(buyPrice(s.symbol)) }}</span>
-          <span class="row__sub">{{ faMoney(market.prices[s.symbol]) }}</span>
-        </span>
+      <template v-for="s in market.symbols" :key="s.symbol">
+        <div v-if="auth.isCustomer" class="row" :class="{ 'is-selected': market.symbol === s.symbol }">
+          <!-- Buy side (right in RTL layout) -->
+          <button type="button" class="row__card row__card--buy" :class="dirClass(s.symbol)" @click="quickOrder(s.symbol, 'BUY')">
+            <i v-if="market.direction[s.symbol]" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
+            <span class="row__price">{{ faMoney(buyPrice(s.symbol)) }}</span>
+            <span class="row__sub">{{ faMoney(market.prices[s.symbol]) }}</span>
+          </button>
 
-        <span class="row__name">
-          <span class="row__label">{{ s.name }}</span>
-        </span>
+          <button type="button" class="row__name" @click="openTrade(s.symbol)">
+            <span class="row__label">{{ s.name }}</span>
+          </button>
 
-        <!-- Sell side (left in RTL layout) -->
-        <span class="row__card row__card--sell" :class="dirClass(s.symbol)">
-          <i v-if="market.direction[s.symbol]" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
-          <span class="row__price">{{ faMoney(sellPrice(s.symbol)) }}</span>
-          <span class="row__sub">{{ faMoney(market.prices[s.symbol]) }}</span>
-        </span>
-      </button>
+          <!-- Sell side (left in RTL layout) -->
+          <button type="button" class="row__card row__card--sell" :class="dirClass(s.symbol)" @click="quickOrder(s.symbol, 'SELL')">
+            <i v-if="market.direction[s.symbol]" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
+            <span class="row__price">{{ faMoney(sellPrice(s.symbol)) }}</span>
+            <span class="row__sub">{{ faMoney(market.prices[s.symbol]) }}</span>
+          </button>
+        </div>
+
+        <button
+          v-else
+          type="button"
+          class="row"
+          :class="{ 'is-selected': market.symbol === s.symbol }"
+          @click="openTrade(s.symbol)"
+        >
+          <!-- Buy side (right in RTL layout) -->
+          <span class="row__card row__card--buy" :class="dirClass(s.symbol)">
+            <i v-if="market.direction[s.symbol]" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
+            <span class="row__price">{{ faMoney(buyPrice(s.symbol)) }}</span>
+            <span class="row__sub">{{ faMoney(market.prices[s.symbol]) }}</span>
+          </span>
+
+          <span class="row__name">
+            <span class="row__label">{{ s.name }}</span>
+          </span>
+
+          <!-- Sell side (left in RTL layout) -->
+          <span class="row__card row__card--sell" :class="dirClass(s.symbol)">
+            <i v-if="market.direction[s.symbol]" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
+            <span class="row__price">{{ faMoney(sellPrice(s.symbol)) }}</span>
+            <span class="row__sub">{{ faMoney(market.prices[s.symbol]) }}</span>
+          </span>
+        </button>
+      </template>
     </div>
-
-    <p class="board__note">
-      قیمت خرید/فروش نرخ لحظه‌ای است · کارمزد ۰٫۵٪ هنگام تسویه سفارش اضافه می‌شود · عدد کوچک: قیمت پایه بازار
+    <p v-if="auth.isCustomer" class="board__note">
+      برای ثبت سریع، روی قیمت خرید یا فروش بزنید · عدد کوچک: قیمت پایه بازار
+    </p>
+    <p v-else class="board__note">
+      قیمت خرید/فروش نرخ لحظه‌ای است · عدد کوچک: قیمت پایه بازار
     </p>
 
-    <!-- Account balance -->
-    <section class="panel balance">
+    <!-- Account balance — customers and guests only; staff work from their
+      dedicated screens and don't need the wallet panel on the board. -->
+    <section v-if="!auth.isStaff" class="panel balance">
       <header class="panel__head">
         <span><i class="material-icons">account_circle</i> مانده حساب</span>
         <button type="button" class="balance__refresh" :disabled="refreshing" @click="refreshAccount">
@@ -127,8 +121,8 @@
       </div>
     </section>
 
-    <!-- Manager message -->
-    <section class="panel message">
+    <!-- Manager message — customers and guests only. -->
+    <section v-if="!auth.isStaff" class="panel message">
       <header class="panel__head"><span><i class="material-icons">forum</i> پیام مدیر</span></header>
       <p class="message__sub">هوالرزاق — شرایط و ضوابط انجام معاملات</p>
       <p class="message__preview">
@@ -142,6 +136,14 @@
     </section>
 
     <TermsModal v-if="showTerms" @close="showTerms = false" />
+
+    <QuickOrderSheet
+      :open="quickOpen"
+      :symbol="quickSymbol"
+      :side="quickSide"
+      @close="quickOpen = false"
+      @done="onQuickDone"
+    />
   </div>
 </template>
 <script setup>
@@ -151,8 +153,8 @@ import { useMarketStore } from '../stores/market'
 import { useAuthStore } from '../stores/auth'
 import TermsModal from '../components/TermsModal.vue'
 import TickerTape from '../components/TickerTape.vue'
-import Sparkline from '../components/Sparkline.vue'
-import { faMoney, faNumber, faWeight, faDelta, faPercent, faTime, faJalaliDateTime, faCompact } from '../utils/format'
+import QuickOrderSheet from './QuickOrderSheet.vue'
+import { faMoney, faWeight, faDelta, faTime, faJalaliDateTime } from '../utils/format'
 
 const market = useMarketStore()
 const auth = useAuthStore()
@@ -163,10 +165,11 @@ const refreshing = ref(false)
 const balanceAt = ref(Date.now())
 const marketFee = auth.feePercent || 0.5
 
-// The hero highlights 18k gold unless another symbol is already selected.
-const heroSymbol = computed(() => market.symbol || 'GOLD18')
-const heroMeta = computed(() => market.meta)
-const heroSpark = computed(() => market.stats[heroSymbol.value]?.spark ?? [])
+// Quick order from the board — customer-only. Guests get the login sheet,
+// staff keep read-only tiles and never see this sheet.
+const quickOpen = ref(false)
+const quickSymbol = ref('')
+const quickSide = ref('BUY')
 
 /**
  * Buy = what the customer pays (base + fee), Sell = what they receive
@@ -191,14 +194,29 @@ function dirClass(symbol) {
   return dir > 0 ? 'is-up' : dir < 0 ? 'is-down' : ''
 }
 
-/** Per-row sparkline series from the 24h stats (empty until history exists). */
-function sparkOf(symbol) {
-  return market.stats[symbol]?.spark ?? []
-}
-
 function openTrade(symbol) {
+  if (!auth.isLoggedIn) {
+    openLogin('login')
+    return
+  }
   market.setSymbol(symbol)
   router.push('/trade')
+}
+
+/** Home buy/sell tiles — customer only. Guests get login, staff stay read-only. */
+function quickOrder(symbol, side) {
+  if (!auth.isLoggedIn) {
+    openLogin('login')
+    return
+  }
+  if (!auth.isCustomer) return
+  quickSymbol.value = symbol
+  quickSide.value = side
+  quickOpen.value = true
+}
+
+function onQuickDone() {
+  balanceAt.value = Date.now()
 }
 
 /** Equity expressed in grams of 18k — the «موجودی کل به طلا» bar. */
@@ -238,133 +256,6 @@ onBeforeUnmount(() => {
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Hero: featured symbol ── */
-.hero {
-  margin-top: 10px;
-  padding: 16px 16px 12px;
-  border-radius: 18px;
-  background: linear-gradient(180deg, var(--card) 0%, var(--surface) 100%);
-  border: 1px solid var(--border);
-  box-shadow: 0 8px 24px rgba(20, 23, 28, 0.07);
-}
-
-.hero__top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.hero__symbol {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  text-align: right;
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-}
-
-.hero__name {
-  font-size: 16px;
-  font-weight: 800;
-  color: var(--text);
-  line-height: 1.3;
-}
-
-.hero__sub {
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.hero__badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 5px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1;
-  white-space: nowrap;
-}
-
-.hero__badge .material-icons {
-  font-size: 16px;
-}
-
-.hero__badge.is-up {
-  background: var(--up-soft);
-  color: var(--up);
-}
-
-.hero__badge.is-down {
-  background: var(--down-soft);
-  color: var(--down);
-}
-
-.hero__price {
-  margin-top: 12px;
-  font-size: 30px;
-  font-weight: 900;
-  line-height: 1.2;
-  letter-spacing: -0.5px;
-  text-align: right;
-}
-
-.hero__price.is-up { color: var(--up); }
-.hero__price.is-down { color: var(--down); }
-
-.hero__unit {
-  margin-right: 6px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-muted);
-}
-
-.hero__stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.hero__stat {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  padding: 8px 4px;
-  border-radius: 12px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-}
-
-.hero__stat i {
-  font-style: normal;
-  font-size: 10.5px;
-  font-weight: 700;
-  color: var(--text-muted);
-}
-
-.hero__stat b {
-  font-size: 12.5px;
-  font-weight: 800;
-  color: var(--text);
-}
-
-.hero__stat.is-up b { color: var(--up); }
-.hero__stat.is-down b { color: var(--down); }
-
-.hero__spark {
-  display: block;
-  width: 100%;
-  margin-top: 10px;
-}
-
 /* ── Last update strip ── */
 .board__update {
   display: flex;
@@ -396,7 +287,7 @@ onBeforeUnmount(() => {
 /* ── Column headers ── */
 .board__head {
   display: grid;
-  grid-template-columns: 1fr minmax(90px, auto) 1fr;
+  grid-template-columns: 1fr auto 1fr;
   gap: 8px;
   padding: 0 4px 8px;
   font-size: 13px;
@@ -404,12 +295,12 @@ onBeforeUnmount(() => {
 }
 
 .board__head-sell {
-  text-align: left;
+  text-align: center;
   color: var(--down);
 }
 
 .board__head-buy {
-  text-align: left;
+  text-align: center;
   color: var(--up);
 }
 
@@ -422,7 +313,7 @@ onBeforeUnmount(() => {
 
 .row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(96px, auto) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   gap: 6px;
   align-items: stretch;
   padding: 0;
@@ -430,6 +321,7 @@ onBeforeUnmount(() => {
   border: none;
   border-radius: 0;
   overflow: visible;
+  min-width: 0;
 }
 
 /* Selected row: dashed accent ring on each floating tile, like the reference. */
@@ -458,10 +350,12 @@ onBeforeUnmount(() => {
   justify-content: center;
   gap: 2px;
   min-height: 72px;
-  padding: 10px 12px;
+  min-width: 0;
+  padding: 10px 6px;
   border-radius: 14px;
   border: 2px solid transparent;
   box-shadow: 0 6px 14px rgba(0, 0, 0, 0.10);
+  overflow: hidden;
 }
 
 .row:active .row__card {
@@ -490,24 +384,31 @@ onBeforeUnmount(() => {
 }
 
 .row__price {
-  font-size: 16px;
+  width: 100%;
+  font-size: clamp(12px, 3.6vw, 16px);
   font-weight: 900;
   line-height: 1.55;
-  white-space: nowrap;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .row__sub {
+  width: 100%;
   font-size: 11px;
   font-weight: 700;
   opacity: 0.62;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* Direction arrow pinned to the bottom-outer corner of each tile, like the reference. */
 .row__trend {
   position: absolute;
-  bottom: 4px;
-  right: 8px;
-  font-size: 20px;
+  bottom: 2px;
+  right: 6px;
+  font-size: 17px;
   line-height: 1;
   opacity: 0.85;
   pointer-events: none;
@@ -515,7 +416,34 @@ onBeforeUnmount(() => {
 }
 
 .row__card--sell .row__trend {
-  right: 8px;
+  right: 6px;
+}
+
+/* Narrow phones: tighter paddings so long prices (e.g. سکه امامی) never
+   push text outside the tile or the screen. */
+@media (max-width: 420px) {
+  .board {
+    padding: 10px 8px 26px;
+  }
+
+  .row {
+    gap: 5px;
+  }
+
+  .row__card {
+    min-height: 68px;
+    padding: 8px 4px;
+    border-radius: 12px;
+  }
+
+  .row__name {
+    padding: 8px 2px;
+    font-size: 12px;
+  }
+
+  .row__sub {
+    font-size: 10px;
+  }
 }
 
 @keyframes flash-up {

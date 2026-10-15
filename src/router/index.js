@@ -12,8 +12,10 @@ import { authGate } from '../utils/authGate'
 import { useAuthStore } from '../stores/auth'
 import CatalogView from '../views/CatalogView.vue'
 import ReportsView from '../views/ReportsView.vue'
+import UsersView from '../views/UsersView.vue'
+import ManagerDeskView from '../views/ManagerDeskView.vue'
 import ForbiddenView from '../views/ForbiddenView.vue'
-import { STAFF_ROLES, ADMIN_ROLES } from '../utils/roles'
+import { STAFF_ROLES, ADMIN_ROLES, ROLES } from '../utils/roles'
 
 /**
  * Live gold/silver trading app. Home is the price board (خرید/فروش quotes),
@@ -48,10 +50,15 @@ const routes = [
   { path: '/settings', name: 'settings', component: SettingsView, meta: { title: 'تنظیمات' } },
   // Staff review queue — every staff role.
   { path: '/review', name: 'review', component: ReviewQueueView, meta: { title: 'صف بررسی', requiresAuth: true, roles: STAFF_ROLES } },
+  // Broker-manager desk: customers + cash approvals — every staff role.
+  { path: '/desk', name: 'desk', component: ManagerDeskView, meta: { title: 'میز کارگزاری', requiresAuth: true, roles: STAFF_ROLES } },
   // Wholesale stores + their movements — every staff role.
   { path: '/stores', name: 'stores', component: CatalogView, meta: { title: 'فروشگاه‌ها', requiresAuth: true, roles: STAFF_ROLES } },
   // Financial reports (trial balance, trades) — admins and above.
   { path: '/reports', name: 'reports', component: ReportsView, meta: { title: 'گزارش‌ها', requiresAuth: true, roles: ADMIN_ROLES } },
+  // User directory + role grants — super-admin only (managers/admins can't
+  // mint roles at or above their own, so they get no UI for it).
+  { path: '/users', name: 'users', component: UsersView, meta: { title: 'کاربران', requiresAuth: true, roles: [ROLES.SUPER_ADMIN] } },
   // Shown when an authenticated user lacks the role for a route.
   { path: '/forbidden', name: 'forbidden', component: ForbiddenView, meta: { title: 'دسترسی ندارید', requiresAuth: true } },
   // Unknown path → the board, never a blank screen.

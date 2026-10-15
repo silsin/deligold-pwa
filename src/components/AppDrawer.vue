@@ -72,11 +72,17 @@
             <button type="button" class="drawer__item" @click="go('/review')">
               <i class="material-icons">fact_check</i> صف بررسی
             </button>
+            <button type="button" class="drawer__item" @click="go('/desk')">
+              <i class="material-icons">support_agent</i> میز کارگزاری
+            </button>
             <button v-if="auth.canViewStores" type="button" class="drawer__item" @click="go('/stores')">
               <i class="material-icons">storefront</i> فروشگاه‌ها
             </button>
             <button v-if="auth.canViewReports" type="button" class="drawer__item" @click="go('/reports')">
               <i class="material-icons">assessment</i> گزارش‌ها
+            </button>
+            <button v-if="auth.isSuperAdmin" type="button" class="drawer__item" @click="go('/users')">
+              <i class="material-icons">group</i> کاربران
             </button>
           </template>
 

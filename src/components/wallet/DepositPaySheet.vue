@@ -90,6 +90,17 @@
         <p v-if="error" class="sheet__err" role="alert">{{ error }}</p>
 
         <button type="button" class="sheet__cta" :disabled="busy" @click="connect">
+          <span v-if="busy" class="spin" aria-hidden="true"></span>
+          {{ busy ? 'در حال اتصال…' : 'اتصال به درگاه بانکی' }}
+        </button>
+      </template>
+
+      <button type="button" class="sheet__cancel" @click="emit('close')">
+        بعداً تکمیل می‌دهم (باقی می‌ماند به‌عنوان درخواست در انتظار)
+      </button>
+    </div>
+  </div>
+</template>
 
 <script setup>
 import { computed, ref } from 'vue'
@@ -155,6 +166,20 @@ async function submit() {
 }
 
 async function connect() {
+  if (props.busy) return
+  await auth.connectDeposit(props.deposit.id)
+}
+
+function copy(text, key) {
+  try {
+    navigator.clipboard?.writeText(text)
+    copied.value = key
+    setTimeout(() => { copied.value = '' }, 1500)
+  } catch {
+    /* clipboard blocked — the number is shown in full anyway */
+  }
+}
+</script>
 
 <style scoped>
 .sheet {
@@ -361,7 +386,6 @@ async function connect() {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
-</style>
 
 .pay__copy {
   flex: 0 0 auto;
@@ -378,30 +402,4 @@ async function connect() {
 .bank__icon { font-size: 34px; color: var(--accent); }
 .bank b { font-size: 14px; font-weight: 900; }
 .bank small { font-size: 11px; color: var(--text-muted); line-height: 1.7; }
-
-  if (props.busy) return
-  await auth.connectDeposit(props.deposit.id)
-}
-
-function copy(text, key) {
-  try {
-    navigator.clipboard?.writeText(text)
-    copied.value = key
-    setTimeout(() => { copied.value = '' }, 1500)
-  } catch {
-    /* clipboard blocked — the number is shown in full anyway */
-  }
-}
-</script>
-
-          <span v-if="busy" class="spin" aria-hidden="true"></span>
-          {{ busy ? 'در حال اتصال…' : 'اتصال به درگاه بانکی' }}
-        </button>
-      </template>
-
-      <button type="button" class="sheet__cancel" @click="emit('close')">
-        بعداً تکمیل می‌دهم (باقی می‌ماند به‌عنوان درخواست در انتظار)
-      </button>
-    </div>
-  </div>
-</template>
+</style>
