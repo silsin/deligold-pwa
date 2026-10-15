@@ -71,8 +71,7 @@
           </button>
         </form>
 
-        <p class="sheet__hint">همین شماره موبایل و رمز عبور سایت دلی گلد را وارد کنید.</p>
-
+ 
         <div class="sheet__safe">
           <span class="material-icons">shield</span>
           معاملات شما از درگاه امن انجام می‌شود

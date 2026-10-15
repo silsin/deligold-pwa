@@ -21,7 +21,7 @@
     <div class="board__head">
       <span class="board__head-buy">می‌خرید</span>
       <span class="board__head-name"></span>
-      <span class="board__head-sell">فروشید</span>
+      <span class="board__head-sell">میفروشید</span>
     </div>
 
     <!-- Price rows.
