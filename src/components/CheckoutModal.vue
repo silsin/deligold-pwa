@@ -92,7 +92,7 @@ defineProps({
   busy: { type: Boolean, default: false }
 })
 
-defineEmits(['confirm', 'cancel'])
+const emit = defineEmits(['confirm', 'cancel'])
 </script>
 
 <style scoped>
