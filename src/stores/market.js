@@ -172,11 +172,52 @@ export const useMarketStore = defineStore('market', () => {
     await fetchMarket({ withChart: false });
   }
 
+  // ── Manual (broker-manager) price overrides ──────────────────────────────
+  // These hit the staff-guarded /market/prices routes. They are kept out of the
+  // reactive board state on purpose: the manager's edits only reach customers
+  // after the API layers them over the feed, which the next board poll shows.
+
+  /** Every stored override, keyed by symbol, for the manager's setup screen. */
+  async function fetchOverrides() {
+    const rows = await api.get('/market/prices');
+    const bySymbol = {};
+    for (const r of Array.isArray(rows) ? rows : []) bySymbol[r.symbol] = r;
+    return bySymbol;
+  }
+
+  /**
+   * Create or replace one symbol's manual price. Returns the saved row, or
+   * `{ ok: false, error }` so the caller can surface the message like the auth
+   * store's staff actions do.
+   */
+  async function saveOverride(symbol, payload) {
+    try {
+      const row = await api.put(`/market/prices/${symbol}`, payload);
+      // The board changed — refresh so the caller sees the new number at once.
+      await fetchMarket({ withChart: false });
+      return { ok: true, row };
+    } catch (e) {
+      return { ok: false, error: e.message || 'ذخیره قیمت ناموفق بود' };
+    }
+  }
+
+  /** Drop a symbol's override so it follows the live feed again. */
+  async function clearOverride(symbol) {
+    try {
+      await api.delete(`/market/prices/${symbol}`);
+      await fetchMarket({ withChart: false });
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e.message || 'حذف قیمت ناموفق بود' };
+    }
+  }
+
   return {
     symbols, prices, buys, sells, source, sourceTitle, updatedAt, stale, note, ranges,
     candles, ticks, symbol, range, loading, error, polling, direction,
     stats, stat, price, meta, rangeOpen, isRangeFallback,
     rangeHigh, rangeLow, change, changePercent, isUp,
-    fetchMarket, fetchStats, startPolling, stopPolling, setSymbol, setRange
+    fetchMarket, fetchStats, startPolling, stopPolling, setSymbol, setRange,
+    fetchOverrides, saveOverride, clearOverride
   }
 })

@@ -23,6 +23,9 @@
         <button type="button" class="tab" :class="{ 'is-on': tab === 'cash' }" role="tab" @click="tab = 'cash'">
           نقدی<span v-if="cashCount" class="count">{{ toFa(cashCount) }}</span>
         </button>
+        <button type="button" class="tab" :class="{ 'is-on': tab === 'prices' }" role="tab" @click="openPrices">
+          قیمت‌ها
+        </button>
       </div>
 
       <!-- ── Customers ── -->
@@ -59,7 +62,7 @@
       </template>
 
       <!-- ── Cash approvals ── -->
-      <template v-else>
+      <template v-else-if="tab === 'cash'">
         <section class="card">
           <header class="card__head"><span><i class="material-icons">savings</i> واریزها</span>
             <span v-if="deposits.length" class="count">{{ toFa(deposits.length) }}</span>

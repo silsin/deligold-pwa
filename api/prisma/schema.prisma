@@ -499,6 +499,37 @@ model StoreMovement {
   @@index([storeId, createdAt])
 }
 
+// ── Board price overrides (broker-manager-set) ──────────────────────────
+
+/// A manually-set price for one symbol, owned by a broker manager.
+///
+/// The live feed (akbarigold) drives the board by default. When a manager sets
+/// a price here, it *replaces* the feed for that symbol — the same `buy`/`sell`
+/// quote fields the feed populates — so the number a customer sees on the home
+/// board and the number an order fills at stay the same reading. A symbol with
+/// no row (or `enabled = false`) keeps following the live feed.
+///
+/// Only staff (BROKER_MANAGER and above) can write these; customers never can.
+model BoardPrice {
+  symbol    String   @id
+  /// Base/mid price in Toman — the small reference number on the tile. Optional;
+  /// derived as the midpoint of buy/sell when omitted.
+  price     Decimal?
+  /// What the customer PAYS to buy (right tile, «می‌خرید»), in Toman. Null = buy side closed.
+  buy       Decimal?
+  /// What the customer RECEIVES when selling (left tile, «میفروشید»), in Toman. Null = sell side closed.
+  sell      Decimal?
+  /// When false the symbol falls back to the live feed entirely.
+  enabled   Boolean  @default(true)
+  /// Close only the buy side (customer cannot buy), mirroring the feed's allowBuy.
+  allowBuy  Boolean  @default(true)
+  /// Close only the sell side (customer cannot sell), mirroring the feed's allowSell.
+  allowSell Boolean  @default(true)
+  /// Who set this price, for the audit trail. Null = seeded/system.
+  updatedById String?
+  updatedAt DateTime @updatedAt
+}
+
 // ── Audit ───────────────────────────────────────────────────────────────────
 
 /// Every privileged action, so "who changed what" is answerable later.

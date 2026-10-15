@@ -1,4 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { BoardPrice, Prisma } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
+import { TradeError } from '../common/errors';
 import { DEFAULT_TRADE_SYMBOL, TRADE_SYMBOLS, isTradeSymbol, type TradeSymbol } from './symbols';
 import {
   SYMBOL_TO_UPSTREAM_ID,
@@ -30,6 +33,8 @@ export interface Quote {
   buy: number | null;
   /** What the shop SELLS at (a customer buying). Null when the source has no spread. */
   sell: number | null;
+  /** True when a broker manager set this price manually (overrides the feed). */
+  manual?: boolean;
 }
 
 export interface Board {
@@ -38,6 +43,21 @@ export interface Board {
   updatedAt: number;
   /** True when the last fetch failed and we are serving a cached/fallback board. */
   stale: boolean;
+}
+
+/**
+ * A manager's manual override, flattened for the client. Prisma `Decimal` fields
+ * are converted to plain numbers so the PWA never has to parse a decimal string.
+ */
+export interface BoardPriceView {
+  symbol: string;
+  price: number | null;
+  buy: number | null;
+  sell: number | null;
+  enabled: boolean;
+  allowBuy: boolean;
+  allowSell: boolean;
+  updatedAt: Date;
 }
 
 /** How long a fetched board is served before the next request re-fetches it. */
@@ -69,6 +89,8 @@ export class MarketService {
   private cache: Board | null = null;
   private inflight: Promise<Board> | null = null;
 
+  constructor(private readonly prisma: PrismaService) {}
+
   /**
    * The current board, fetching a fresh one when the cache has expired.
    *
@@ -83,15 +105,26 @@ export class MarketService {
     if (this.inflight) return this.inflight;
 
     this.inflight = this.fetchBoard()
-      .then(board => {
-        this.cache = board;
-        return board;
+      .then(async board => {
+        const merged = await this.applyOverrides(board);
+        this.cache = merged;
+        return merged;
       })
       .finally(() => {
         this.inflight = null;
       });
 
     return this.inflight;
+  }
+
+  /**
+   * Drop the cached board so the next `board()` re-reads the feed *and* the
+   * manager overrides. Called whenever a broker manager saves or clears a price,
+   * so a manual change is visible on the customer board immediately rather than
+   * after the 30s cache TTL.
+   */
+  invalidate(): void {
+    this.cache = null;
   }
 
   /** Price for one symbol, or null when the board does not carry it. */
@@ -205,6 +238,114 @@ export class MarketService {
       };
     }
     return { quotes, source: 'fallback', updatedAt: Date.now(), stale: true };
+  }
+
+  // ── Manual (broker-manager) overrides ──────────────────────────────────
+
+  /**
+   * Layer broker-manager overrides on top of the fetched board.
+   *
+   * Each enabled override fully replaces its symbol's quote with the manager's
+   * numbers, written into the *same* `buy`/`sell`/`price` fields the feed uses —
+   * so the customer board, the ticker and the order-fill price all read one value
+   * whether it came from akbarigold or was typed in at the shop. An override with
+   * no numbers at all is skipped, so an empty form can never blank a live symbol.
+   */
+  private async applyOverrides(board: Board): Promise<Board> {
+    let overrides: BoardPrice[];
+    try {
+      overrides = await this.prisma.boardPrice.findMany({ where: { enabled: true } });
+    } catch (err) {
+      // Overrides are an enhancement; the feed board is still valid without them.
+      this.logger.warn(`could not read board overrides, serving feed board: ${String(err)}`);
+      return board;
+    }
+    if (!overrides.length) return board;
+
+    const quotes: Record<string, Quote> = { ...board.quotes };
+    for (const o of overrides) {
+      const buy = o.allowBuy && o.buy != null ? Math.round(Number(o.buy)) : null;
+      const sell = o.allowSell && o.sell != null ? Math.round(Number(o.sell)) : null;
+      const explicit = o.price != null ? Math.round(Number(o.price)) : null;
+      // An empty override is ignored rather than blanking a live symbol.
+      if (buy == null && sell == null && explicit == null) continue;
+      const price =
+        explicit ?? (buy != null && sell != null ? Math.round((buy + sell) / 2) : (buy ?? sell ?? 0));
+      quotes[o.symbol] = { symbol: o.symbol, price, buy, sell, manual: true };
+    }
+
+    return { ...board, quotes };
+  }
+
+  /** Every manual override row, for the broker manager's setup screen. */
+  async listOverrides(): Promise<BoardPriceView[]> {
+    const rows = await this.prisma.boardPrice.findMany({ orderBy: { symbol: 'asc' } });
+    return rows.map(r => this.overrideView(r));
+  }
+
+  /**
+   * Create or replace a symbol's manual price.
+   *
+   * Broker-manager only — enforced by the controller's `@Roles`, not here. The
+   * cache is cleared so the new number reaches the customer board on the next
+   * read rather than after the 30s feed TTL.
+   */
+  async setOverride(
+    actorId: string,
+    symbol: string,
+    input: {
+      price?: number | null;
+      buy?: number | null;
+      sell?: number | null;
+      enabled?: boolean;
+      allowBuy?: boolean;
+      allowSell?: boolean;
+    },
+  ): Promise<BoardPriceView> {
+    if (!isTradeSymbol(symbol)) throw new TradeError('نماد معاملاتی نامعتبر است');
+
+    const toDec = (v: number | null | undefined) =>
+      v == null ? null : new Prisma.Decimal(Math.round(v));
+
+    const data = {
+      price: toDec(input.price),
+      buy: toDec(input.buy),
+      sell: toDec(input.sell),
+      enabled: input.enabled ?? true,
+      allowBuy: input.allowBuy ?? true,
+      allowSell: input.allowSell ?? true,
+      updatedById: actorId,
+    };
+
+    const row = await this.prisma.boardPrice.upsert({
+      where: { symbol },
+      create: { symbol, ...data },
+      update: data,
+    });
+    this.invalidate();
+    return this.overrideView(row);
+  }
+
+  /** Remove a symbol's override so it falls back to the live feed. */
+  async clearOverride(symbol: string): Promise<void> {
+    if (!isTradeSymbol(symbol)) throw new TradeError('نماد معاملاتی نامعتبر است');
+    await this.prisma.boardPrice.deleteMany({ where: { symbol } });
+    this.invalidate();
+  }
+
+  /** Prisma Decimal → plain number, keeping null as null (not 0). */
+  private overrideView(r: BoardPrice): BoardPriceView {
+    const num = (v: Prisma.Decimal | null) => (v == null ? null : Number(v));
+    return {
+      symbol: r.symbol,
+      price: num(r.price),
+      buy: num(r.buy),
+      sell: num(r.sell),
+      enabled: r.enabled,
+      allowBuy: r.allowBuy,
+      allowSell: r.allowSell,
+      updatedAt: r.updatedAt,
+    };
   }
 }
 
