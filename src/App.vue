@@ -8,10 +8,10 @@
         <span class="topbar__logo">دلی گلد</span>
       </div>
       <div class="topbar__meta">
-        <span v-if="market.stale" class="topbar__stale">داده قدیمی</span>
         <span class="topbar__clock">{{ clock }}</span>
         <RouterLink v-if="auth.isLoggedIn" to="/account" class="topbar__wallet">
-          {{ faMoney(auth.balance) }}
+          <i class="material-icons">account_balance_wallet</i>
+          <span>{{ faMoney(auth.balance) }}</span>
         </RouterLink>
         <button v-else type="button" class="topbar__login" @click="openLogin('login')">ورود</button>
       </div>
@@ -249,14 +249,29 @@ button {
 }
 
 .topbar__wallet {
-  padding: 4px 12px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 20%, transparent), color-mix(in srgb, var(--accent) 8%, transparent));
   border: 1px solid var(--accent);
   color: var(--accent);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
+  transition: all 0.2s ease;
+}
+
+.topbar__wallet:hover {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 25%, transparent), color-mix(in srgb, var(--accent) 12%, transparent));
+  border-color: var(--accent-light);
+}
+
+.topbar__wallet i {
+  font-size: 16px;
+  display: flex;
+  align-items: center;
 }
 
 .topbar__login {

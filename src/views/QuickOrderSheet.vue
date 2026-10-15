@@ -65,7 +65,9 @@
         :grams="pendingOrder?.grams ?? 0"
         :execPrice="pendingOrder?.execPrice ?? 0"
         :orderFee="pendingOrder?.orderFee ?? 0"
+        :orderTotal="pendingOrder?.orderTotal ?? 0"
         :netTotal="pendingOrder?.netTotal ?? 0"
+        :currentBalance="auth.balance"
         :busy="busy"
         @confirm="handleCheckoutConfirm"
         @cancel="handleCheckoutCancel"
@@ -157,15 +159,18 @@ function setPercent(p) {
   }
 }
 
-watch(() => [props.open, props.symbol, props.side], () => {
-  amount.value = ''
-  percent.value = 0
-  busy.value = false
-  error.value = ''
-  success.value = ''
-  showCheckout.value = false
-  showDeposit.value = false
-  pendingOrder.value = null
+watch(() => props.open, (isOpen) => {
+  if (isOpen) {
+    // Reset form only when opening the modal
+    amount.value = ''
+    percent.value = 0
+    busy.value = false
+    error.value = ''
+    success.value = ''
+    showCheckout.value = false
+    showDeposit.value = false
+    pendingOrder.value = null
+  }
 })
 
 async function submit() {
@@ -189,6 +194,7 @@ async function submit() {
       side: props.side,
       grams: grams.value,
       execPrice: execPrice.value,
+      orderTotal: orderTotal.value,
       orderFee: orderFee.value,
       netTotal: netTotal.value,
       symbolName: symbolName.value

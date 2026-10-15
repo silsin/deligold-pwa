@@ -33,7 +33,18 @@
     </section>
 
     <section class="block">
-      <h2 class="section-title">نمادهای صفحه اصلی</h2>
+      <h2 class="section-title">نوار متحرک قیمت‌ها</h2>
+      <label class="switch">
+        <input v-model="showTicker" type="checkbox" @change="saveTickerPref" />
+        <span class="switch__track"><span class="switch__knob"></span></span>
+        <span class="switch__text">
+          نمایش نوار متحرک قیمت‌ها در صفحه اصلی
+        </span>
+      </label>
+      <p class="hint">نوار بالای صفحه اصلی که به‌صورت مداوم نمادها را نمایش می‌دهد.</p>
+    </section>
+
+    <section class="block">
       <p class="hint">به‌صورت پیش‌فرض فقط خرید/فروش نماد منتخب (۲ دکمه) نمایش داده می‌شود. نمادهای بیشتر را از اینجا فعال کنید.</p>
       <div class="modes">
         <button
@@ -105,6 +116,24 @@ import { useAuthStore } from '../stores/auth'
 import { loadFeatured, loadVisible, saveFeatured, saveVisible } from '../utils/boardPrefs'
 import { faAgo, faPercent } from '../utils/format'
 
+function loadTickerPref() {
+  try {
+    const stored = localStorage.getItem('dg_show_ticker')
+    return stored === null ? true : stored === 'true'
+  } catch {
+    return true
+  }
+}
+
+function saveTickerPref() {
+  try {
+    localStorage.setItem('dg_show_ticker', showTicker.value.toString())
+    window.dispatchEvent(new Event('dg-ticker-pref'))
+  } catch {
+    /* ignore */
+  }
+}
+
 const market = useMarketStore()
 const auth = useAuthStore()
 
@@ -112,6 +141,7 @@ const palettes = THEME_PALETTES
 const active = ref(loadPaletteId())
 const autoRefresh = ref(true)
 const mode = ref(localStorage.getItem('dg_trade_chart_mode') || 'candle')
+const showTicker = ref(loadTickerPref())
 
 const featured = ref(loadFeatured())
 const visibleSet = ref(loadVisible() ?? [])

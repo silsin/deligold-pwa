@@ -1,7 +1,7 @@
 <template>
   <div v-if="open" class="checkout" role="dialog" aria-modal="true" aria-label="تأیید سفارش">
-    <div class="checkout__scrim" @click="!busy && emit('cancel')"></div>
-    <div class="checkout__panel">
+    <div class="checkout__scrim" @click="emit('cancel')"></div>
+    <div class="checkout__panel" @click.stop>
       <span class="checkout__grip" aria-hidden="true"></span>
       <header class="checkout__head">
         <h2 class="checkout__title" :class="side === 'BUY' ? 'is-buy' : 'is-sell'">تأیید سفارش</h2>
@@ -14,14 +14,20 @@
         >close</button>
       </header>
 
+      <!-- Order Details -->
       <div class="checkout__row">
         <span>{{ symbolName }} · {{ side === 'BUY' ? 'خرید' : 'فروش' }}</span>
         <b>{{ faWeight(grams) }} گرم</b>
       </div>
 
       <div class="checkout__row">
-        <span>قیمت معامله</span>
-        <b>{{ faMoney(execPrice) }}</b>
+        <span>قیمت واحد</span>
+        <b>{{ faMoney(execPrice) }} / گرم</b>
+      </div>
+
+      <div class="checkout__row">
+        <span>مبلغ معامله</span>
+        <b>{{ faMoney(orderTotal) }}</b>
       </div>
 
       <div class="checkout__row">
@@ -34,6 +40,14 @@
       <div class="checkout__row checkout__row--total">
         <span>{{ side === 'BUY' ? 'جمع پرداختی' : 'جمع دریافتی' }}</span>
         <b>{{ faMoney(netTotal) }}</b>
+      </div>
+
+      <div class="checkout__divider"></div>
+
+      <!-- Wallet Info -->
+      <div class="checkout__row">
+        <span>موجودی فعلی</span>
+        <b :class="{ 'is-warning': side === 'BUY' && currentBalance < netTotal }">{{ faMoney(currentBalance) }}</b>
       </div>
 
       <div class="checkout__actions">
@@ -70,7 +84,9 @@ defineProps({
   grams: { type: Number, default: 0 },
   execPrice: { type: Number, default: 0 },
   orderFee: { type: Number, default: 0 },
+  orderTotal: { type: Number, default: 0 },
   netTotal: { type: Number, default: 0 },
+  currentBalance: { type: Number, default: 0 },
   busy: { type: Boolean, default: false }
 })
 
@@ -92,11 +108,13 @@ defineEmits(['confirm', 'cancel'])
   inset: 0;
   background: rgba(0, 0, 0, 0.55);
   cursor: pointer;
+  z-index: 0;
+  pointer-events: auto;
 }
 
 .checkout__panel {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   width: 100%;
   max-width: 520px;
   border-radius: 22px 22px 0 0;
@@ -104,6 +122,7 @@ defineEmits(['confirm', 'cancel'])
   border: 1px solid var(--border);
   border-bottom: none;
   padding: 14px 18px calc(22px + env(safe-area-inset-bottom));
+  pointer-events: auto;
 }
 
 .checkout__grip {
@@ -170,6 +189,10 @@ defineEmits(['confirm', 'cancel'])
 .checkout__row b {
   color: var(--text);
   font-weight: 800;
+}
+
+.checkout__row b.is-warning {
+  color: var(--down);
 }
 
 .checkout__row--total {

@@ -21,6 +21,7 @@
     <template v-else>
       <!-- Live ticker tape: an always-moving pulse of the whole market. -->
       <TickerTape
+        v-if="showTicker"
         :symbols="market.symbols"
         :prices="market.prices"
         :stats="market.stats"
@@ -181,6 +182,19 @@ import { openLogin } from '../utils/authGate'
 import { loadFeatured, loadVisible } from '../utils/boardPrefs'
 import { faMoney, faWeight, faDelta, faTime, faJalaliDateTime } from '../utils/format'
 
+function loadTickerPref() {
+  try {
+    const stored = localStorage.getItem('dg_show_ticker')
+    return stored === null ? true : stored === 'true'
+  } catch {
+    return true
+  }
+}
+
+function refreshTickerPref() {
+  showTicker.value = loadTickerPref()
+}
+
 const market = useMarketStore()
 const auth = useAuthStore()
 const router = useRouter()
@@ -189,6 +203,7 @@ const showTerms = ref(false)
 const refreshing = ref(false)
 const balanceAt = ref(Date.now())
 const marketFee = auth.feePercent || 0.5
+const showTicker = ref(loadTickerPref())
 
 // Quick order from the board — customer-only. Guests get the login sheet,
 // staff keep read-only tiles and never see this sheet.
@@ -286,12 +301,14 @@ onMounted(() => {
   if (auth.isLoggedIn) void auth.fetchAccount()
   window.addEventListener('storage', refreshBoardPrefs)
   window.addEventListener('dg-board-prefs', refreshBoardPrefs)
+  window.addEventListener('dg-ticker-pref', refreshTickerPref)
 })
 
 onBeforeUnmount(() => {
   market.stopPolling()
   window.removeEventListener('storage', refreshBoardPrefs)
   window.removeEventListener('dg-board-prefs', refreshBoardPrefs)
+  window.removeEventListener('dg-ticker-pref', refreshTickerPref)
 })
 </script>
 
