@@ -49,31 +49,29 @@
           </button>
         </div>
 
-        <button
+        <div
           v-else
-          type="button"
           class="row"
           :class="{ 'is-selected': market.symbol === s.symbol }"
-          @click="quickOrder(s.symbol, 'BUY')"
         >
           <!-- Buy side (right in RTL layout) -->
-          <span class="row__card row__card--buy" :class="dirClass(s.symbol)">
+          <button type="button" class="row__card row__card--buy" :class="dirClass(s.symbol)" @click="quickOrder(s.symbol, 'BUY')">
             <i v-if="market.direction[s.symbol]" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
             <span class="row__price">{{ faMoney(buyPrice(s.symbol)) }}</span>
             <span class="row__sub">{{ faMoney(market.prices[s.symbol]) }}</span>
-          </span>
+          </button>
 
           <span class="row__name">
             <span class="row__label">{{ s.name }}</span>
           </span>
 
           <!-- Sell side (left in RTL layout) -->
-          <span class="row__card row__card--sell" :class="dirClass(s.symbol)">
+          <button type="button" class="row__card row__card--sell" :class="dirClass(s.symbol)" @click="quickOrder(s.symbol, 'SELL')">
             <i v-if="market.direction[s.symbol]" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
             <span class="row__price">{{ faMoney(sellPrice(s.symbol)) }}</span>
             <span class="row__sub">{{ faMoney(market.prices[s.symbol]) }}</span>
-          </span>
-        </button>
+          </button>
+        </div>
       </template>
     </div>
     <div class="board__more">
@@ -81,7 +79,7 @@
         {{ showAll ? 'نمایش کمتر' : 'نمایش همه نمادها' }}
       </button>
     </div>
-    <p v-if="auth.isCustomer" class="board__note">
+    <p v-if="auth.isLoggedIn" class="board__note">
       برای ثبت سریع، روی قیمت خرید یا فروش بزنید · عدد کوچک: قیمت پایه بازار
     </p>
     <p v-else class="board__note">
@@ -206,9 +204,8 @@ function quickOrder(symbol, side) {
     openLogin('login')
     return
   }
-  if (!auth.isCustomer) return
   quickSymbol.value = symbol
-  quickSide.value = side
+  quickSide.value = side ?? 'BUY'
   quickOpen.value = true
 }
 function onQuickDone() {
