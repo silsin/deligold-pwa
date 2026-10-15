@@ -109,7 +109,14 @@ export const useMarketStore = defineStore('market', () => {
     error.value = '';
     try {
       const data = await api.get('/market/board');
-      symbols.value = Array.isArray(data.symbols) ? data.symbols : [];
+      // Ensure symbols is always an array; if missing, keep existing or use fallback
+      if (Array.isArray(data.symbols) && data.symbols.length > 0) {
+        symbols.value = data.symbols;
+      } else if (!symbols.value || symbols.value.length === 0) {
+        // If we still have no symbols, log a warning but continue
+        console.warn('No symbols received from API, symbols will remain empty');
+      }
+      
       const quotes = data.quotes ?? {};
       const nextPrices = {};
       const nextBuys = {};
@@ -135,6 +142,7 @@ export const useMarketStore = defineStore('market', () => {
       }
     } catch (e) {
       error.value = e.message || 'دریافت قیمت‌ها ناموفق بود';
+      console.error('Market fetch error:', e);
     } finally {
       loading.value = false;
     }

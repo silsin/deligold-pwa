@@ -1,152 +1,172 @@
 <template>
   <div class="board">
-    <!-- Live ticker tape: an always-moving pulse of the whole market. -->
-    <TickerTape
-      :symbols="market.symbols"
-      :prices="market.prices"
-      :stats="market.stats"
-      :current="market.symbol"
-      @select="quickOrder"
-    />
-
-    <!-- Last update strip -->
-    <div class="board__update">
-      <span class="board__update-label">آخرین آپدیت قیمت</span>
-      <span class="board__update-time">{{ faJalaliDateTime(market.updatedAt) }}</span>
-      <span v-if="market.stale" class="board__stale">کش قدیمی</span>
+    <!-- Show loading state while fetching -->
+    <div v-if="market.loading" class="board__loading">
+      <span>در حال دریافت اطلاعات...</span>
     </div>
 
-    <!-- Column headers -->
-    <!-- RTL: first grid item lands rightmost, so buy (right) must precede sell. -->
-    <div class="board__head">
-      <span class="board__head-buy">می‌خرید</span>
-      <span class="board__head-name"></span>
-      <span class="board__head-sell">میفروشید</span>
+    <!-- Show error state if fetch failed -->
+    <div v-else-if="market.error" class="board__error">
+      <span>{{ market.error }}</span>
+      <button type="button" @click="retryFetch">تلاش دوباره</button>
     </div>
 
-    <!-- Price rows.
-      Customer: buy/sell tiles are order actions (open the quick sheet).
-      Everyone else (guest/staff): the whole block is a read-only price tile. -->
-    <div class="board__rows">
-      <template v-for="s in visibleRows" :key="s.symbol">
-        <div v-if="auth.isLoggedIn && auth.isCustomer" class="row" :class="{ 'is-selected': market.symbol === s.symbol }">
-          <!-- Buy side (right in RTL layout) -->
-          <button type="button" class="row__card row__card--buy" :class="dirClass(s.symbol)" @click="quickOrder(s.symbol, 'BUY')">
-            <i v-if="market.direction[s.symbol]" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
-            <span class="row__price">{{ faMoney(buyPrice(s.symbol)) }}</span>
-            <span class="row__sub">{{ faMoney(market.prices[s.symbol]) }}</span>
-          </button>
-
-          <button type="button" class="row__name" @click="quickOrder(s.symbol, 'BUY')">
-            <span class="row__label">{{ s.name }}</span>
-          </button>
-
-          <!-- Sell side (left in RTL layout) -->
-          <button type="button" class="row__card row__card--sell" :class="dirClass(s.symbol)" @click="quickOrder(s.symbol, 'SELL')">
-            <i v-if="market.direction[s.symbol]" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
-            <span class="row__price">{{ faMoney(sellPrice(s.symbol)) }}</span>
-            <span class="row__sub">{{ faMoney(market.prices[s.symbol]) }}</span>
-          </button>
-        </div>
-
-        <div
-          v-else
-          class="row"
-          :class="{ 'is-selected': market.symbol === s.symbol }"
-        >
-          <!-- Buy side (right in RTL layout) -->
-          <button type="button" class="row__card row__card--buy" :class="dirClass(s.symbol)" @click="quickOrder(s.symbol, 'BUY')">
-            <i v-if="market.direction[s.symbol]" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
-            <span class="row__price">{{ faMoney(buyPrice(s.symbol)) }}</span>
-            <span class="row__sub">{{ faMoney(market.prices[s.symbol]) }}</span>
-          </button>
-
-          <span class="row__name">
-            <span class="row__label">{{ s.name }}</span>
-          </span>
-
-          <!-- Sell side (left in RTL layout) -->
-          <button type="button" class="row__card row__card--sell" :class="dirClass(s.symbol)" @click="quickOrder(s.symbol, 'SELL')">
-            <i v-if="market.direction[s.symbol]" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
-            <span class="row__price">{{ faMoney(sellPrice(s.symbol)) }}</span>
-            <span class="row__sub">{{ faMoney(market.prices[s.symbol]) }}</span>
-          </button>
-        </div>
-      </template>
+    <!-- Show empty state if no symbols -->
+    <div v-else-if="!market.symbols || market.symbols.length === 0" class="board__empty">
+      <span>داده بازار در دسترس نیست</span>
+      <button type="button" @click="retryFetch">تلاش دوباره</button>
     </div>
-    <div class="board__more">
-      <button type="button" class="board__more-btn" @click="showAll = !showAll">
-        {{ showAll ? 'نمایش کمتر' : 'نمایش همه نمادها' }}
-      </button>
-    </div>
-    <p v-if="auth.isLoggedIn" class="board__note">
-      برای ثبت سریع، روی قیمت خرید یا فروش بزنید · عدد کوچک: قیمت پایه بازار
-    </p>
-    <p v-else class="board__note">
-      قیمت خرید/فروش نرخ لحظه‌ای است · عدد کوچک: قیمت پایه بازار
-    </p>
 
-    <!-- Account balance — customers and guests only; staff work from their
-      dedicated screens and don't need the wallet panel on the board. -->
-    <section v-if="!auth.isStaff" class="panel balance">
-      <header class="panel__head">
-        <span><i class="material-icons">account_circle</i> مانده حساب</span>
-        <button type="button" class="balance__refresh" :disabled="refreshing" @click="refreshAccount">
-          <i class="material-icons">refresh</i>
-        </button>
-      </header>
+    <!-- Normal board content -->
+    <template v-else>
+      <!-- Live ticker tape: an always-moving pulse of the whole market. -->
+      <TickerTape
+        :symbols="market.symbols"
+        :prices="market.prices"
+        :stats="market.stats"
+        :current="market.symbol"
+        @select="quickOrder"
+      />
 
-      <template v-if="auth.isLoggedIn">
-        <small class="balance__time">به‌روزرسانی: {{ faTime(balanceAt) }}</small>
-        <div class="balance__grid">
-          <div class="balance__cell">
-            <small>موجودی تومان</small>
-            <b>{{ faMoney(auth.balance) }}</b>
-          </div>
-          <div class="balance__cell">
-            <small>ارزش کل دارایی</small>
-            <b class="is-accent">{{ faMoney(auth.equity) }}</b>
-          </div>
-          <div class="balance__cell">
-            <small>سود/زیان باز</small>
-            <b :class="auth.totalPnl >= 0 ? 'is-up' : 'is-down'">{{ faDelta(auth.totalPnl) }}</b>
-          </div>
-        </div>
-        <div class="balance__bar">
-          <span class="balance__bar-label">موجودی کل به طلا:</span>
-          <b>{{ faWeight(goldEquivalent) }} گرم</b>
-        </div>
-      </template>
-
-      <div v-else class="balance__guest">
-        <p>برای مشاهده مانده حساب وارد شوید.</p>
-        <button type="button" class="balance__login" @click="openLogin('login')">ورود</button>
+      <!-- Last update strip -->
+      <div class="board__update">
+        <span class="board__update-label">آخرین آپدیت قیمت</span>
+        <span class="board__update-time">{{ faJalaliDateTime(market.updatedAt) }}</span>
+        <span v-if="market.stale" class="board__stale">کش قدیمی</span>
       </div>
-    </section>
 
-    <!-- Manager message — customers and guests only. -->
-    <section v-if="!auth.isStaff" class="panel message">
-      <header class="panel__head"><span><i class="material-icons">forum</i> پیام مدیر</span></header>
-      <p class="message__sub">هوالرزاق — شرایط و ضوابط انجام معاملات</p>
-      <p class="message__preview">
-        کلیه معاملات این مجموعه به‌صورت نقدی انجام می‌شود و خریداران محترم می‌توانند نسبت به
-        تسویه هم‌زمان اقدام نمایند. لطفاً پیش از معامله شرایط کامل را مطالعه کنید.
+      <!-- Column headers -->
+      <!-- RTL: first grid item lands rightmost, so buy (right) must precede sell. -->
+      <div class="board__head">
+        <span class="board__head-buy">می‌خرید</span>
+        <span class="board__head-name"></span>
+        <span class="board__head-sell">میفروشید</span>
+      </div>
+
+      <!-- Price rows.
+        Customer: buy/sell tiles are order actions (open the quick sheet).
+        Everyone else (guest/staff): the whole block is a read-only price tile. -->
+      <div class="board__rows">
+        <template v-for="s in visibleRows" :key="s.symbol">
+          <div v-if="auth.isLoggedIn && auth.isCustomer" class="row" :class="{ 'is-selected': market.symbol === s.symbol }">
+            <!-- Buy side (right in RTL layout) -->
+            <button type="button" class="row__card row__card--buy" :class="dirClass(s.symbol)" @click="quickOrder(s.symbol, 'BUY')">
+              <i v-if="market.direction[s.symbol]" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
+              <span class="row__price">{{ faMoney(buyPrice(s.symbol)) }}</span>
+              <span class="row__sub">{{ faMoney(market.prices[s.symbol]) }}</span>
+            </button>
+
+            <button type="button" class="row__name" @click="quickOrder(s.symbol, 'BUY')">
+              <span class="row__label">{{ s.name }}</span>
+            </button>
+
+            <!-- Sell side (left in RTL layout) -->
+            <button type="button" class="row__card row__card--sell" :class="dirClass(s.symbol)" @click="quickOrder(s.symbol, 'SELL')">
+              <i v-if="market.direction[s.symbol]" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
+              <span class="row__price">{{ faMoney(sellPrice(s.symbol)) }}</span>
+              <span class="row__sub">{{ faMoney(market.prices[s.symbol]) }}</span>
+            </button>
+          </div>
+
+          <div
+            v-else
+            class="row"
+            :class="{ 'is-selected': market.symbol === s.symbol }"
+          >
+            <!-- Buy side (right in RTL layout) -->
+            <button type="button" class="row__card row__card--buy" :class="dirClass(s.symbol)" @click="quickOrder(s.symbol, 'BUY')">
+              <i v-if="market.direction[s.symbol]" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
+              <span class="row__price">{{ faMoney(buyPrice(s.symbol)) }}</span>
+              <span class="row__sub">{{ faMoney(market.prices[s.symbol]) }}</span>
+            </button>
+
+            <span class="row__name">
+              <span class="row__label">{{ s.name }}</span>
+            </span>
+
+            <!-- Sell side (left in RTL layout) -->
+            <button type="button" class="row__card row__card--sell" :class="dirClass(s.symbol)" @click="quickOrder(s.symbol, 'SELL')">
+              <i v-if="market.direction[s.symbol]" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
+              <span class="row__price">{{ faMoney(sellPrice(s.symbol)) }}</span>
+              <span class="row__sub">{{ faMoney(market.prices[s.symbol]) }}</span>
+            </button>
+          </div>
+        </template>
+      </div>
+      <div class="board__more">
+        <button type="button" class="board__more-btn" @click="showAll = !showAll">
+          {{ showAll ? 'نمایش کمتر' : 'نمایش همه نمادها' }}
+        </button>
+      </div>
+      <p v-if="auth.isLoggedIn" class="board__note">
+        برای ثبت سریع، روی قیمت خرید یا فروش بزنید · عدد کوچک: قیمت پایه بازار
       </p>
-      <button type="button" class="message__more" @click="showTerms = true">
-        مشاهده شرایط کامل
-      </button>
+      <p v-else class="board__note">
+        قیمت خرید/فروش نرخ لحظه‌ای است · عدد کوچک: قیمت پایه بازار
+      </p>
 
-    </section>
+      <!-- Account balance — customers and guests only; staff work from their
+        dedicated screens and don't need the wallet panel on the board. -->
+      <section v-if="!auth.isStaff" class="panel balance">
+        <header class="panel__head">
+          <span><i class="material-icons">account_circle</i> مانده حساب</span>
+          <button type="button" class="balance__refresh" :disabled="refreshing" @click="refreshAccount">
+            <i class="material-icons">refresh</i>
+          </button>
+        </header>
 
-    <TermsModal v-if="showTerms" @close="showTerms = false" />
+        <template v-if="auth.isLoggedIn">
+          <small class="balance__time">به‌روزرسانی: {{ faTime(balanceAt) }}</small>
+          <div class="balance__grid">
+            <div class="balance__cell">
+              <small>موجودی تومان</small>
+              <b>{{ faMoney(auth.balance) }}</b>
+            </div>
+            <div class="balance__cell">
+              <small>ارزش کل دارایی</small>
+              <b class="is-accent">{{ faMoney(auth.equity) }}</b>
+            </div>
+            <div class="balance__cell">
+              <small>سود/زیان باز</small>
+              <b :class="auth.totalPnl >= 0 ? 'is-up' : 'is-down'">{{ faDelta(auth.totalPnl) }}</b>
+            </div>
+          </div>
+          <div class="balance__bar">
+            <span class="balance__bar-label">موجودی کل به طلا:</span>
+            <b>{{ faWeight(goldEquivalent) }} گرم</b>
+          </div>
+        </template>
 
-    <QuickOrderSheet
-      :open="quickOpen"
-      :symbol="quickSymbol"
-      :side="quickSide"
-      @close="quickOpen = false"
-      @done="onQuickDone"
-    />
+        <div v-else class="balance__guest">
+          <p>برای مشاهده مانده حساب وارد شوید.</p>
+          <button type="button" class="balance__login" @click="openLogin('login')">ورود</button>
+        </div>
+      </section>
+
+      <!-- Manager message — customers and guests only. -->
+      <section v-if="!auth.isStaff" class="panel message">
+        <header class="panel__head"><span><i class="material-icons">forum</i> پیام مدیر</span></header>
+        <p class="message__sub">هوالرزاق — شرایط و ضوابط انجام معاملات</p>
+        <p class="message__preview">
+          کلیه معاملات این مجموعه به‌صورت نقدی انجام می‌شود و خریداران محترم می‌توانند نسبت به
+          تسویه هم‌زمان اقدام نمایند. لطفاً پیش از معامله شرایط کامل را مطالعه کنید.
+        </p>
+        <button type="button" class="message__more" @click="showTerms = true">
+          مشاهده شرایط کامل
+        </button>
+
+      </section>
+
+      <TermsModal v-if="showTerms" @close="showTerms = false" />
+
+      <QuickOrderSheet
+        :open="quickOpen"
+        :symbol="quickSymbol"
+        :side="quickSide"
+        @close="quickOpen = false"
+        @done="onQuickDone"
+      />
+    </template>
   </div>
 </template>
 <script setup>
@@ -254,6 +274,11 @@ async function refreshAccount() {
   }
 }
 
+async function retryFetch() {
+  await market.fetchMarket({ withChart: false, record: true })
+  await market.fetchStats()
+}
+
 onMounted(() => {
   void market.fetchMarket({ withChart: false, record: true })
   void market.fetchStats()
@@ -276,6 +301,37 @@ onBeforeUnmount(() => {
   margin: 0 auto;
   padding: 12px 12px 30px;
   font-variant-numeric: tabular-nums;
+}
+
+/* ── Loading, Error, and Empty States ── */
+.board__loading,
+.board__error,
+.board__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 40px 20px;
+  min-height: 300px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.board__error,
+.board__empty {
+  gap: 20px;
+}
+
+.board__error button,
+.board__empty button {
+  padding: 9px 20px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
 }
 
 /* ── Last update strip ── */
