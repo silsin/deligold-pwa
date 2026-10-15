@@ -42,6 +42,7 @@ server {
 
     location / {
         try_files $uri $uri/ /index.html;
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
     }
 
     # ── The service worker ───────────────────────────────────────────────────
@@ -67,6 +68,12 @@ server {
     # nginx's stock mime.types has no webmanifest entry, so the browser would
     # get text/plain and refuse to install the PWA.
     location = /manifest.webmanifest {
+        default_type application/manifest+json;
+        add_header Cache-Control "no-cache, must-revalidate" always;
+    }
+
+    # Some builds emit manifest.json instead of manifest.webmanifest.
+    location = /manifest.json {
         default_type application/manifest+json;
         add_header Cache-Control "no-cache, must-revalidate" always;
     }

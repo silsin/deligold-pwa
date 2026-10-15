@@ -35,7 +35,7 @@ export default defineConfig({
       workbox: {
         skipWaiting: true,
         clientsClaim: true,
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        globPatterns: ['**/*.{js,css,ico,png,svg,woff2}'],
         // Market data must never be served stale from the cache.
         navigateFallbackDenylist: [/^\/(auth|users|trade|wallet|market|reports|stores|uploads)\//],
         runtimeCaching: [
