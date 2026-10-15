@@ -1,6 +1,10 @@
 <template>
   <div v-if="open" class="sheet" role="dialog" aria-modal="true" :aria-label="title">
-    <div class="sheet__scrim" @click="emit('close')"></div>
+    <div
+      class="sheet__scrim"
+      :style="{ pointerEvents: showCheckout || showDeposit ? 'none' : 'auto' }"
+      @click="emit('close')"
+    ></div>
     <section class="sheet__panel" @click.stop>
       <span class="sheet__grip" aria-hidden="true"></span>
       <header class="sheet__head">
