@@ -91,13 +91,23 @@ export const useMarketStore = defineStore('market', () => {
   const isUp = computed(() => change.value >= 0)
 
   function trackDirection(next) {
-    const dir = {}
+    // Compute new directions
     for (const [key, value] of Object.entries(next)) {
       const before = previous.value[key]
-      dir[key] = before === undefined ? 0 : value > before ? 1 : value < before ? -1 : 0
+      const newDir = before === undefined ? 0 : value > before ? 1 : value < before ? -1 : 0
+      if (direction.value[key] !== newDir) direction.value[key] = newDir
     }
-    direction.value = dir
-    previous.value = { ...next }
+    // Remove stale keys from direction and previous
+    for (const key of Object.keys(direction.value)) {
+      if (!(key in next)) delete direction.value[key]
+    }
+    // Update previous granularly
+    for (const [key, value] of Object.entries(next)) {
+      if (previous.value[key] !== value) previous.value[key] = value
+    }
+    for (const key of Object.keys(previous.value)) {
+      if (!(key in next)) delete previous.value[key]
+    }
   }
 
   /**
@@ -135,9 +145,32 @@ export const useMarketStore = defineStore('market', () => {
         if (typeof q.sell === 'number') nextSells[key] = q.sell;
       }
       trackDirection(nextPrices);
-      prices.value = nextPrices;
-      buys.value = nextBuys;
-      sells.value = nextSells;
+      
+      // --- prices ---
+      // Remove keys that no longer exist in the new data
+      for (const key of Object.keys(prices.value)) {
+        if (!(key in nextPrices)) delete prices.value[key];
+      }
+      // Add or update only keys whose value changed
+      for (const [key, val] of Object.entries(nextPrices)) {
+        if (prices.value[key] !== val) prices.value[key] = val;
+      }
+
+      // --- buys ---
+      for (const key of Object.keys(buys.value)) {
+        if (!(key in nextBuys)) delete buys.value[key];
+      }
+      for (const [key, val] of Object.entries(nextBuys)) {
+        if (buys.value[key] !== val) buys.value[key] = val;
+      }
+
+      // --- sells ---
+      for (const key of Object.keys(sells.value)) {
+        if (!(key in nextSells)) delete sells.value[key];
+      }
+      for (const [key, val] of Object.entries(nextSells)) {
+        if (sells.value[key] !== val) sells.value[key] = val;
+      }
       source.value = data.source ?? '';
       sourceTitle.value = data.sourceTitle ?? data.source ?? '';
       updatedAt.value = data.updatedAt ?? Date.now();

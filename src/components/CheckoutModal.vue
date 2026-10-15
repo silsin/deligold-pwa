@@ -118,12 +118,15 @@ defineEmits(['confirm', 'cancel'])
   z-index: 2;
   width: 100%;
   max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
   border-radius: 22px 22px 0 0;
   background: var(--card);
   border: 1px solid var(--border);
   border-bottom: none;
   padding: 14px 18px calc(22px + env(safe-area-inset-bottom));
   pointer-events: auto;
+  box-sizing: border-box;
 }
 
 .checkout__grip {
@@ -170,6 +173,8 @@ defineEmits(['confirm', 'cancel'])
   border: none;
   cursor: pointer;
   padding: 0;
+  pointer-events: auto;
+  z-index: 10;
 }
 
 .checkout__close:disabled {
@@ -232,6 +237,8 @@ defineEmits(['confirm', 'cancel'])
   justify-content: center;
   gap: 6px;
   transition: opacity 0.2s;
+  pointer-events: auto;
+  z-index: 10;
 }
 
 .checkout__btn:disabled {
