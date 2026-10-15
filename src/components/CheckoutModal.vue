@@ -101,6 +101,7 @@ defineEmits(['confirm', 'cancel'])
   display: flex;
   align-items: flex-end;
   justify-content: center;
+  pointer-events: none;
 }
 
 .checkout__scrim {

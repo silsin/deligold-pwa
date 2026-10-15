@@ -110,16 +110,18 @@ export const useMarketStore = defineStore('market', () => {
     try {
       const data = await api.get('/market/board');
       
-      // Only update symbols if they actually changed (by comparing symbol IDs)
+      // Only update symbols if they actually changed
       if (Array.isArray(data.symbols) && data.symbols.length > 0) {
-        const newSymbolIds = data.symbols.map(s => s.symbol).join(',')
-        const oldSymbolIds = symbols.value.map(s => s.symbol).join(',')
-        
-        if (newSymbolIds !== oldSymbolIds) {
+        // Compare by length first (fast check), then by symbol IDs
+        if (symbols.value.length !== data.symbols.length || 
+            symbols.value.some((s, i) => s.symbol !== data.symbols[i].symbol)) {
           symbols.value = data.symbols;
         }
+        // If symbols match, skip the update to avoid triggering reactivity
       } else if (!symbols.value || symbols.value.length === 0) {
-        console.warn('No symbols received from API, symbols will remain empty');
+        if (Array.isArray(data.symbols) && data.symbols.length > 0) {
+          symbols.value = data.symbols;
+        }
       }
       
       const quotes = data.quotes ?? {};

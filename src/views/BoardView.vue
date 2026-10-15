@@ -171,7 +171,7 @@
   </div>
 </template>
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMarketStore } from '../stores/market'
 import { useAuthStore } from '../stores/auth'
@@ -257,15 +257,27 @@ const goldEquivalent = computed(() => {
  * Customer home: just 2 buttons (buy/sell) for the featured symbol by
  * default. Customer enables more symbols from Settings → those rows appear.
  * Guests/staff always see the full read-only board.
- * 
- * CRITICAL: Use symbol IDs for filtering to avoid re-renders when market.symbols reference changes.
  */
 const boardPrefsTick = ref(0)
 const showAll = ref(false)
+const symbolList = ref([])
+
+// Update symbol list only when market actually provides new symbols
+watchEffect(() => {
+  if (market.symbols && market.symbols.length > 0) {
+    // Only update if symbols actually changed by comparing IDs
+    if (!symbolList.value.length || 
+        symbolList.value.length !== market.symbols.length ||
+        symbolList.value[0]?.symbol !== market.symbols[0]?.symbol) {
+      symbolList.value = market.symbols
+    }
+  }
+})
+
 const visibleRows = computed(() => {
   void boardPrefsTick.value
-  const allSymbols = market.symbols
   
+  const allSymbols = symbolList.value
   if (!allSymbols || allSymbols.length === 0) return []
   
   if (showAll.value) return allSymbols
