@@ -6,7 +6,7 @@
       :prices="market.prices"
       :stats="market.stats"
       :current="market.symbol"
-      @select="openTrade"
+      @select="openHomeOrder"
     />
 
     <!-- Last update strip -->
@@ -28,7 +28,7 @@
       Customer: buy/sell tiles are order actions (open the quick sheet).
       Everyone else (guest/staff): the whole block is a read-only price tile. -->
     <div class="board__rows">
-      <template v-for="s in market.symbols" :key="s.symbol">
+      <template v-for="s in visibleRows" :key="s.symbol">
         <div v-if="auth.isCustomer" class="row" :class="{ 'is-selected': market.symbol === s.symbol }">
           <!-- Buy side (right in RTL layout) -->
           <button type="button" class="row__card row__card--buy" :class="dirClass(s.symbol)" @click="quickOrder(s.symbol, 'BUY')">
@@ -37,7 +37,7 @@
             <span class="row__sub">{{ faMoney(market.prices[s.symbol]) }}</span>
           </button>
 
-          <button type="button" class="row__name" @click="openTrade(s.symbol)">
+          <button type="button" class="row__name" @click="openHomeOrder(s.symbol, 'BUY')">
             <span class="row__label">{{ s.name }}</span>
           </button>
 
@@ -54,7 +54,7 @@
           type="button"
           class="row"
           :class="{ 'is-selected': market.symbol === s.symbol }"
-          @click="openTrade(s.symbol)"
+          @click="openHomeOrder(s.symbol, 'BUY')"
         >
           <!-- Buy side (right in RTL layout) -->
           <span class="row__card row__card--buy" :class="dirClass(s.symbol)">
@@ -148,12 +148,13 @@
 </template>
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { useMarketStore } from '../stores/market'
 import { useAuthStore } from '../stores/auth'
 import TermsModal from '../components/TermsModal.vue'
 import TickerTape from '../components/TickerTape.vue'
 import QuickOrderSheet from './QuickOrderSheet.vue'
+import { openLogin } from '../utils/authGate'
+import { loadFeatured, loadVisible } from '../utils/boardPrefs'
 import { faMoney, faWeight, faDelta, faTime, faJalaliDateTime } from '../utils/format'
 
 const market = useMarketStore()
@@ -194,13 +195,15 @@ function dirClass(symbol) {
   return dir > 0 ? 'is-up' : dir < 0 ? 'is-down' : ''
 }
 
-function openTrade(symbol) {
+function openHomeOrder(symbol, side = 'BUY') {
   if (!auth.isLoggedIn) {
     openLogin('login')
     return
   }
-  market.setSymbol(symbol)
-  router.push('/trade')
+  if (!auth.isCustomer) return
+  quickSymbol.value = symbol
+  quickSide.value = side
+  quickOpen.value = true
 }
 
 /** Home buy/sell tiles — customer only. Guests get login, staff stay read-only. */
@@ -219,12 +222,36 @@ function onQuickDone() {
   balanceAt.value = Date.now()
 }
 
-/** Equity expressed in grams of 18k — the «موجودی کل به طلا» bar. */
 const goldEquivalent = computed(() => {
   const gold18 = market.prices.GOLD18
   if (!gold18) return 0
   return auth.equity / gold18
 })
+
+/**
+ * Customer home: just 2 buttons (buy/sell) for the featured symbol by
+ * default. Customer enables more symbols from Settings → those rows appear.
+ * Guests/staff always see the full read-only board.
+ */
+const boardPrefsTick = ref(0)
+const visibleRows = computed(() => {
+  void boardPrefsTick.value
+  if (!auth.isCustomer) return market.symbols
+  const visible = loadVisible()
+  if (visible && visible.length) {
+    const set = new Set(visible)
+    const rows = market.symbols.filter(s => set.has(s.symbol))
+    if (rows.length) return rows
+  }
+  const feat = loadFeatured(market.symbol || 'GOLD18')
+  const found = market.symbols.find(s => s.symbol === feat)
+  if (found) return [found]
+  return market.symbols.slice(0, 1)
+})
+
+function refreshBoardPrefs() {
+  boardPrefsTick.value++
+}
 
 async function refreshAccount() {
   refreshing.value = true
@@ -241,10 +268,14 @@ onMounted(() => {
   void market.fetchStats()
   market.startPolling(15000)
   if (auth.isLoggedIn) void auth.fetchAccount()
+  window.addEventListener('storage', refreshBoardPrefs)
+  window.addEventListener('dg-board-prefs', refreshBoardPrefs)
 })
 
 onBeforeUnmount(() => {
   market.stopPolling()
+  window.removeEventListener('storage', refreshBoardPrefs)
+  window.removeEventListener('dg-board-prefs', refreshBoardPrefs)
 })
 </script>
 

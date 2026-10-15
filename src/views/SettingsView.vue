@@ -33,6 +33,33 @@
     </section>
 
     <section class="block">
+      <h2 class="section-title">نمادهای صفحه اصلی</h2>
+      <p class="hint">به‌صورت پیش‌فرض فقط خرید/فروش نماد منتخب (۲ دکمه) نمایش داده می‌شود. نمادهای بیشتر را از اینجا فعال کنید.</p>
+      <div class="modes">
+        <button
+          v-for="s in market.symbols"
+          :key="s.symbol"
+          type="button"
+          class="chip"
+          :class="{ 'chip--on': featured === s.symbol }"
+          @click="setFeatured(s.symbol)"
+        >
+          ★ {{ s.short || s.name }}
+        </button>
+      </div>
+      <div class="symlist">
+        <label v-for="s in market.symbols" :key="s.symbol" class="switch">
+          <input v-model="visibleSet" type="checkbox" :value="s.symbol" @change="saveVisibleSet" />
+          <span class="switch__track"><span class="switch__knob"></span></span>
+          <span class="switch__text">{{ s.name }}</span>
+        </label>
+      </div>
+      <button type="button" class="btn btn--ghost btn--block" @click="resetBoardPrefs">
+        بازگشت به پیش‌فرض (فقط نماد منتخب)
+      </button>
+    </section>
+
+    <section class="block">
       <h2 class="section-title">به‌روزرسانی خودکار</h2>
       <label class="switch">
         <input v-model="autoRefresh" type="checkbox" @change="togglePolling" />
@@ -75,6 +102,7 @@ import { onMounted, ref } from 'vue'
 import { THEME_PALETTES, applyPalette, loadPaletteId, savePaletteId } from '../theme'
 import { useMarketStore } from '../stores/market'
 import { useAuthStore } from '../stores/auth'
+import { loadFeatured, loadVisible, saveFeatured, saveVisible } from '../utils/boardPrefs'
 import { faAgo, faPercent } from '../utils/format'
 
 const market = useMarketStore()
@@ -84,6 +112,39 @@ const palettes = THEME_PALETTES
 const active = ref(loadPaletteId())
 const autoRefresh = ref(true)
 const mode = ref(localStorage.getItem('dg_trade_chart_mode') || 'candle')
+
+const featured = ref(loadFeatured())
+const visibleSet = ref(loadVisible() ?? [])
+
+function notifyBoard() {
+  try {
+    window.dispatchEvent(new Event('dg-board-prefs'))
+  } catch {
+    /* ignore */
+  }
+}
+
+function setFeatured(symbol) {
+  featured.value = symbol
+  saveFeatured(symbol)
+  // Featured symbol is always visible, even in default (featured-only) mode.
+  if (visibleSet.value.length && !visibleSet.value.includes(symbol)) {
+    visibleSet.value = [...visibleSet.value, symbol]
+    saveVisible(visibleSet.value)
+  }
+  notifyBoard()
+}
+
+function saveVisibleSet() {
+  saveVisible(visibleSet.value.length ? [...visibleSet.value] : null)
+  notifyBoard()
+}
+
+function resetBoardPrefs() {
+  visibleSet.value = []
+  saveVisible(null)
+  notifyBoard()
+}
 
 function choose(id) {
   active.value = id
@@ -192,6 +253,13 @@ onMounted(() => {
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 16%, transparent);
   color: var(--accent);
+}
+
+.symlist {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
 }
 
 .switch {
