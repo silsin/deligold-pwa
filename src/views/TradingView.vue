@@ -1,13 +1,13 @@
 ﻿<template>
   <div class="tv" dir="rtl">
     <header class="tv__header">
-      <button type="button" class="tv__back" aria-label="Ø¨Ø§Ø²Ú¯Ø´Øª Ø¨Ù‡ Ù‚ÛŒÙ…Øªâ€ŒÙ‡Ø§" @click="$router.push('/')">
+      <button type="button" class="tv__back" aria-label="بازگشت به قیمت‌ها" @click="$router.push('/')">
         <i class="material-icons">chevron_left</i>
       </button>
       <button type="button" class="tv__pairbtn" @click="sheetOpen = true">
         <span class="tv__pair">{{ market.meta?.short ?? market.symbol }}</span>
-        <span class="tv__div">/ØªÙˆÙ…Ø§Ù†</span>
-        <span class="tv__caret">â–¼</span>
+        <span class="tv__div">/تومان</span>
+        <span class="tv__caret">▼</span>
       </button>
       <div class="tv__pricebox">
         <div class="tv__price" :class="market.isUp ? 'is-up' : 'is-down'">
@@ -22,15 +22,15 @@
     <section class="tv__chartwrap">
       <PriceChart :candles="market.candles" :ticks="market.ticks" :range="market.range" :mode="mode" />
       <div v-if="market.loading && market.candles.length === 0" class="tv__empty">
-        Ø¯Ø± Ø­Ø§Ù„ Ø¯Ø±ÛŒØ§ÙØª Ù†Ù…ÙˆØ¯Ø§Ø±â€¦
+        در حال دریافت نمودار…
       </div>
       <div v-else-if="market.candles.length === 0" class="tv__empty">
-        ØªØ§Ø±ÛŒØ®Ú†Ù‡â€ŒØ§ÛŒ Ø¨Ø±Ø§ÛŒ Ø§ÛŒÙ† Ù†Ù…Ø§Ø¯ Ø«Ø¨Øª Ù†Ø´Ø¯Ù‡ â€” Ø¨Ø§ Ø§ÙˆÙ„ÛŒÙ† Ø¯Ø§Ø¯Ù‡â€ŒÙ‡Ø§ Ù†Ù…ÙˆØ¯Ø§Ø± Ø³Ø§Ø®ØªÙ‡ Ù…ÛŒâ€ŒØ´ÙˆØ¯.
+        تاریخچه‌ای برای این نماد ثبت نشده — با اولین داده‌ها نمودار ساخته می‌شود.
       </div>
     </section>
 
     <section class="tv__of">
-      <div class="tv__oftab" role="tablist" aria-label="Ù†ÙˆØ¹ Ù…Ø¹Ø§Ù…Ù„Ù‡">
+      <div class="tv__oftab" role="tablist" aria-label="نوع معامله">
         <button
           type="button"
           class="tv__oftabbtn"
@@ -39,7 +39,7 @@
           :aria-selected="side === 'BUY'"
           @click="side = 'BUY'"
         >
-          Ø®Ø±ÛŒØ¯
+          خرید
         </button>
         <button
           type="button"
@@ -49,7 +49,7 @@
           :aria-selected="side === 'SELL'"
           @click="side = 'SELL'"
         >
-          ÙØ±ÙˆØ´
+          فروش
         </button>
       </div>
 
@@ -60,12 +60,12 @@
           inputmode="decimal"
           min="0"
           step="any"
-          placeholder="Ù…Ù‚Ø¯Ø§Ø± Ø±Ø§ ÙˆØ§Ø±Ø¯ Ú©Ù†ÛŒØ¯"
+          placeholder="مقدار را وارد کنید"
           class="tv__amount"
           :disabled="submitting || !amount"
           @keyup.enter="submitOrder"
         />
-        <span class="tv__unit">Ú¯Ø±Ù…</span>
+        <span class="tv__unit">گرم</span>
       </div>
 
       <button
@@ -76,11 +76,11 @@
       >
         <span v-if="side === 'BUY'">
           <i class="material-icons">trending_up</i>
-          Ø®Ø±ÛŒØ¯
+          خرید
         </span>
         <span v-else>
           <i class="material-icons">trending_down</i>
-          ÙØ±ÙˆØ´
+          فروش
         </span>
       </button>
 
@@ -135,7 +135,7 @@ async function submitOrder() {
   orderError.value = ''
   orderSuccess.value = ''
   if (!auth.isLoggedIn) {
-    orderError.value = 'Ø¨Ø±Ø§ÛŒ Ù…Ø¹Ø§Ù…Ù„Ù‡ Ø§Ø¨ØªØ¯Ø§ ÙˆØ§Ø±Ø¯ Ø­Ø³Ø§Ø¨ Ø´ÙˆÛŒØ¯'
+    orderError.value = 'برای معامله ابتدا وارد حساب شوید'
     return
   }
   submitting.value = true
@@ -146,21 +146,21 @@ async function submitOrder() {
       grams: parseFloat(amount.value),
     })
     if (!result.ok) {
-      orderError.value = result.error || 'Ø«Ø¨Øª Ø³ÙØ§Ø±Ø´ Ù†Ø§Ù…ÙˆÙÙ‚ Ø¨ÙˆØ¯'
+      orderError.value = result.error || 'ثبت سفارش ناموفق بود'
       return
     }
     const order = result.order
     orderSuccess.value =
       side.value === 'BUY'
-        ? `Ø®Ø±ÛŒØ¯ ${order?.grams ?? amount.value} Ú¯Ø±Ù… Ø¨Ø§ Ù‚ÛŒÙ…Øª ${faMoney(order?.price ?? 'â€”')} Ø«Ø¨Øª Ø´Ø¯`
-        : `ÙØ±ÙˆØ´ ${order?.grams ?? amount.value} Ú¯Ø±Ù… Ø¨Ø§ Ù‚ÛŒÙ…Øª ${faMoney(order?.price ?? 'â€”')} Ø«Ø¨Øª Ø´Ø¯`
+        ? `خرید ${order?.grams ?? amount.value} گرم با قیمت ${faMoney(order?.price ?? '—')} ثبت شد`
+        : `فروش ${order?.grams ?? amount.value} گرم با قیمت ${faMoney(order?.price ?? '—')} ثبت شد`
     if (order) {
-      orderSuccess.value += ` (Ú©Ø§Ø±Ù…Ø²Ø¯ ${faMoney(order.fee ?? 0)})`
+      orderSuccess.value += ` (کارمزد ${faMoney(order.fee ?? 0)})`
     }
     amount.value = ''
     await auth.fetchAccount()
   } catch (e) {
-    orderError.value = e.message || 'Ø«Ø¨Øª Ø³ÙØ§Ø±Ø´ Ù†Ø§Ù…ÙˆÙÙ‚ Ø¨ÙˆØ¯'
+    orderError.value = e.message || 'ثبت سفارش ناموفق بود'
   } finally {
     submitting.value = false
   }
