@@ -77,6 +77,9 @@
 
     <!-- First-visit gate: manager terms must be acknowledged once per device. -->
     <TermsModal v-if="showTerms" required @close="showTerms = false" />
+
+    <!-- PWA update banner — appears when a new build is deployed -->
+    <UpdateBanner />
   </div>
 </template>
 
@@ -88,6 +91,7 @@ import { useAuthStore } from './stores/auth'
 import AppDrawer from './components/AppDrawer.vue'
 import LoginSheet from './components/LoginSheet.vue'
 import TermsModal from './components/TermsModal.vue'
+import UpdateBanner from './components/UpdateBanner.vue'
 import { applyPalette, loadPaletteId } from './theme'
 import { faMoney, faTime, termsAccepted } from './utils/format'
 
