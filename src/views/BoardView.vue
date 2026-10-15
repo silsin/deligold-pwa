@@ -29,7 +29,7 @@
       Everyone else (guest/staff): the whole block is a read-only price tile. -->
     <div class="board__rows">
       <template v-for="s in visibleRows" :key="s.symbol">
-        <div v-if="auth.isCustomer" class="row" :class="{ 'is-selected': market.symbol === s.symbol }">
+        <div v-if="auth.isLoggedIn && auth.isCustomer" class="row" :class="{ 'is-selected': market.symbol === s.symbol }">
           <!-- Buy side (right in RTL layout) -->
           <button type="button" class="row__card row__card--buy" :class="dirClass(s.symbol)" @click="quickOrder(s.symbol, 'BUY')">
             <i v-if="market.direction[s.symbol]" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
@@ -148,6 +148,7 @@
 </template>
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useMarketStore } from '../stores/market'
 import { useAuthStore } from '../stores/auth'
 import TermsModal from '../components/TermsModal.vue'
@@ -236,7 +237,7 @@ const goldEquivalent = computed(() => {
 const boardPrefsTick = ref(0)
 const visibleRows = computed(() => {
   void boardPrefsTick.value
-  if (!auth.isCustomer) return market.symbols
+  if (!auth.isLoggedIn || !auth.isCustomer) return market.symbols
   const visible = loadVisible()
   if (visible && visible.length) {
     const set = new Set(visible)
