@@ -57,30 +57,36 @@
         <span>{{ busy ? 'در حال ثبت…' : `${side === 'BUY' ? 'خرید' : 'فروش'} ${symbolShort}` }}</span>
       </button>
 
-      <!-- Checkout and deposit modals -->
-      <CheckoutModal
-        :open="showCheckout"
-        :symbolName="pendingOrder?.symbolName ?? ''"
-        :side="pendingOrder?.side ?? props.side"
-        :grams="pendingOrder?.grams ?? 0"
-        :execPrice="pendingOrder?.execPrice ?? 0"
-        :orderFee="pendingOrder?.orderFee ?? 0"
-        :orderTotal="pendingOrder?.orderTotal ?? 0"
-        :netTotal="pendingOrder?.netTotal ?? 0"
-        :currentBalance="auth.balance"
-        :busy="busy"
-        @confirm="handleCheckoutConfirm"
-        @cancel="handleCheckoutCancel"
-      />
-      <DepositSheet
-        v-if="showDeposit"
-        :busy="depositBusy"
-        :initialAmount="depositAmount"
-        @close="handleDepositClose"
-        @submit="handleDepositSubmit"
-      />
     </section>
   </div>
+
+  <!-- Modals must live outside the scrollable sheet panel — a fixed-position
+       child of an overflow:auto container loses its fixed stacking context on
+       iOS/Android and the overlay is clipped or unreachable.
+       Guard with open so they unmount when the whole sheet is closed. -->
+  <template v-if="open">
+    <CheckoutModal
+      :open="showCheckout"
+      :symbolName="pendingOrder?.symbolName ?? ''"
+      :side="pendingOrder?.side ?? props.side"
+      :grams="pendingOrder?.grams ?? 0"
+      :execPrice="pendingOrder?.execPrice ?? 0"
+      :orderFee="pendingOrder?.orderFee ?? 0"
+      :orderTotal="pendingOrder?.orderTotal ?? 0"
+      :netTotal="pendingOrder?.netTotal ?? 0"
+      :currentBalance="auth.balance"
+      :busy="busy"
+      @confirm="handleCheckoutConfirm"
+      @cancel="handleCheckoutCancel"
+    />
+    <DepositSheet
+      v-if="showDeposit"
+      :busy="depositBusy"
+      :initialAmount="depositAmount"
+      @close="handleDepositClose"
+      @submit="handleDepositSubmit"
+    />
+  </template>
 </template>
 
 <script setup>

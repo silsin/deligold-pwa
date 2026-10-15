@@ -158,17 +158,21 @@
 
       </section>
 
-      <TermsModal v-if="showTerms" @close="showTerms = false" />
-
-      <QuickOrderSheet
-        :open="quickOpen"
-        :symbol="quickSymbol"
-        :side="quickSide"
-        @close="quickOpen = false"
-        @done="onQuickDone"
-      />
     </template>
   </div>
+
+  <!-- Modals are rendered outside the market v-else block so they are never
+       torn down by a price poll update. Their visibility is controlled solely
+       by their own open flags. -->
+  <TermsModal v-if="showTerms" @close="showTerms = false" />
+
+  <QuickOrderSheet
+    :open="quickOpen"
+    :symbol="quickSymbol"
+    :side="quickSide"
+    @close="quickOpen = false"
+    @done="onQuickDone"
+  />
 </template>
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'

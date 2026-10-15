@@ -113,9 +113,11 @@ export const useMarketStore = defineStore('market', () => {
   /**
    * Pull the NestJS board once. Charts are synthetic (no candle store yet):
    * keep `candles`/`ticks` empty and derive header stats from the mid price.
+   * `background` is true for poll refreshes — skip the loading flag so open
+   * modals are never torn down by a routine update.
    */
-  async function fetchMarket({ withChart = true, record = false } = {}) {
-    loading.value = true;
+  async function fetchMarket({ withChart = true, record = false, background = false } = {}) {
+    if (!background) loading.value = true;
     error.value = '';
     try {
       const data = await api.get('/market/board');
@@ -184,7 +186,7 @@ export const useMarketStore = defineStore('market', () => {
       error.value = e.message || 'دریافت قیمت‌ها ناموفق بود';
       console.error('Market fetch error:', e);
     } finally {
-      loading.value = false;
+      if (!background) loading.value = false;
     }
   }
 
@@ -200,7 +202,7 @@ export const useMarketStore = defineStore('market', () => {
     stopPolling();
     pollTimer.value = setInterval(() => {
       if (document.visibilityState === 'visible') {
-        void fetchMarket({ withChart: false });
+        void fetchMarket({ withChart: false, background: true });
       }
     }, intervalMs);
   }
