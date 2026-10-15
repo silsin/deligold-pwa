@@ -114,11 +114,14 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { faMoney, faCompact, toFa } from '../../utils/format'
 import { api } from '../../utils/api.js'
 
-const props = defineProps({ busy: { type: Boolean, default: false } })
+const props = defineProps({
+  busy: { type: Boolean, default: false },
+  initialAmount: { type: Number, default: 0 }
+})
 const emit = defineEmits(['close', 'submit'])
 
 /** Step-down sizes, so the row doubles as a rough size ladder. */
@@ -155,6 +158,19 @@ const valid = computed(() => {
   if (isManual.value && reference.value.trim().length < 4) return false
   return true
 })
+
+/** Pre-fill amount field when initialAmount prop is set. */
+watch(
+  () => props.initialAmount,
+  (newVal) => {
+    if (newVal > 0) {
+      amount.value = newVal
+      raw.value = toFa(newVal)
+      error.value = ''
+    }
+  },
+  { immediate: true }
+)
 
 /** Persian numerals are accepted: ۱۲۳ parses the same as 123. */
 function parseDigits(value) {

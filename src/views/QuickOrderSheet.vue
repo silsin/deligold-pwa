@@ -56,6 +56,27 @@
         <i class="material-icons">{{ side === 'BUY' ? 'trending_up' : 'trending_down' }}</i>
         <span>{{ busy ? 'در حال ثبت…' : `${side === 'BUY' ? 'خرید' : 'فروش'} ${symbolShort}` }}</span>
       </button>
+
+      <!-- Checkout and deposit modals -->
+      <CheckoutModal
+        :open="showCheckout"
+        :symbolName="pendingOrder?.symbolName ?? ''"
+        :side="pendingOrder?.side ?? props.side"
+        :grams="pendingOrder?.grams ?? 0"
+        :execPrice="pendingOrder?.execPrice ?? 0"
+        :orderFee="pendingOrder?.orderFee ?? 0"
+        :netTotal="pendingOrder?.netTotal ?? 0"
+        :busy="busy"
+        @confirm="handleCheckoutConfirm"
+        @cancel="handleCheckoutCancel"
+      />
+      <DepositSheet
+        v-if="showDeposit"
+        :busy="depositBusy"
+        :initialAmount="depositAmount"
+        @close="handleDepositClose"
+        @submit="handleDepositSubmit"
+      />
     </section>
   </div>
 </template>
@@ -65,6 +86,8 @@ import { computed, ref, watch } from 'vue'
 import { useMarketStore } from '../stores/market'
 import { useAuthStore } from '../stores/auth'
 import { faMoney, faWeight, faPercent, toFa } from '../utils/format'
+import CheckoutModal from '../components/CheckoutModal.vue'
+import DepositSheet from '../components/wallet/DepositSheet.vue'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -82,6 +105,13 @@ const pcts = [0, 25, 50, 75, 100]
 const busy = ref(false)
 const error = ref('')
 const success = ref('')
+
+// Checkout flow state
+const showCheckout = ref(false)
+const showDeposit = ref(false)
+const depositBusy = ref(false)
+const pendingOrder = ref(null) // {symbol, side, grams, execPrice, orderFee, netTotal, symbolName}
+const depositAmount = ref(0)
 
 const meta = computed(() => market.symbols.find(s => s.symbol === props.symbol) ?? market.meta)
 const symbolName = computed(() => meta.value?.name ?? props.symbol)
@@ -133,6 +163,9 @@ watch(() => [props.open, props.symbol, props.side], () => {
   busy.value = false
   error.value = ''
   success.value = ''
+  showCheckout.value = false
+  showDeposit.value = false
+  pendingOrder.value = null
 })
 
 async function submit() {
@@ -142,14 +175,55 @@ async function submit() {
     error.value = 'برای معامله ابتدا وارد حساب شوید'
     return
   }
+  if (!canSubmit.value) {
+    return
+  }
   busy.value = true
   try {
-    const result = await auth.placeOrder({ symbol: props.symbol, side: props.side, grams: grams.value })
+    // Fetch fresh wallet balance
+    await auth.fetchWallet()
+    
+    // Snapshot the pending order
+    pendingOrder.value = {
+      symbol: props.symbol,
+      side: props.side,
+      grams: grams.value,
+      execPrice: execPrice.value,
+      orderFee: orderFee.value,
+      netTotal: netTotal.value,
+      symbolName: symbolName.value
+    }
+    
+    // Check if balance is sufficient
+    if (auth.balance >= netTotal.value) {
+      showCheckout.value = true
+    } else {
+      depositAmount.value = Math.ceil(netTotal.value - auth.balance)
+      showDeposit.value = true
+    }
+  } catch (e) {
+    error.value = e.message || 'خطای نامشخص'
+  } finally {
+    busy.value = false
+  }
+}
+
+async function handleCheckoutConfirm() {
+  if (!pendingOrder.value) return
+  busy.value = true
+  try {
+    const result = await auth.placeOrder({
+      symbol: pendingOrder.value.symbol,
+      side: pendingOrder.value.side,
+      grams: pendingOrder.value.grams
+    })
     if (!result.ok) {
       error.value = result.error || 'ثبت سفارش ناموفق بود'
       return
     }
     const order = result.order
+    showCheckout.value = false
+    pendingOrder.value = null
     if (order && (order.kind === 'MANUAL' || order.status === 'AWAITING_RECEIPT')) {
       success.value = `سفارش ${order.ref ?? ''} ثبت شد — برای بارگذاری رسید به صفحه معامله بروید`
     } else {
@@ -164,6 +238,43 @@ async function submit() {
   } finally {
     busy.value = false
   }
+}
+
+function handleCheckoutCancel() {
+  showCheckout.value = false
+  pendingOrder.value = null
+}
+
+async function handleDepositSubmit(payload) {
+  depositBusy.value = true
+  try {
+    const result = await auth.requestDeposit(
+      payload.amount,
+      payload.method,
+      payload.reference,
+      payload.note
+    )
+    if (!result.ok) {
+      error.value = result.error || 'ثبت واریز ناموفق بود'
+      depositBusy.value = false
+      return
+    }
+    await auth.fetchWallet()
+    if (auth.balance >= (pendingOrder.value?.netTotal ?? 0)) {
+      showDeposit.value = false
+      showCheckout.value = true
+    } else {
+      error.value = 'درخواست واریز ثبت شد اما هنوز تأیید نشده است. پس از تأیید کارشناس، می‌توانید سفارش را ادامه دهید.'
+    }
+  } catch (e) {
+    error.value = e.message || 'ثبت واریز ناموفق بود'
+  } finally {
+    depositBusy.value = false
+  }
+}
+
+function handleDepositClose() {
+  showDeposit.value = false
 }
 </script>
 
