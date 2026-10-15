@@ -290,6 +290,7 @@ export const useAuthStore = defineStore('auth', () => {
       const query = new URLSearchParams();
       if (params.search) query.set('search', params.search);
       if (params.role) query.set('role', params.role);
+      if (params.verified !== undefined) query.set('verified', String(params.verified));
       if (params.limit) query.set('limit', String(params.limit));
       const qs = query.toString();
       applyDirectory(await api.get(qs ? `/users?${qs}` : '/users'));
@@ -332,6 +333,100 @@ export const useAuthStore = defineStore('auth', () => {
       return { ok: true, user: created };
     } catch (e) {
       error.value = e.message || 'ایجاد کاربر ناموفق بود';
+      return { ok: false, error: error.value };
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  // ── Broker manager: customer verify / block ────────────────────────────────
+  // `POST /users/:id/verify` grants or revokes the badge that unlocks wallet
+  // trading; `POST /users/:id/status` blocks or unblocks. Same-broker rule
+  // and "never yourself / never peers" are enforced server-side.
+  async function setCustomerVerified(userId, verified, note = '') {
+    if (!token.value) return { ok: false };
+    loading.value = true;
+    error.value = '';
+    try {
+      const updated = await api.post(`/users/${userId}/verify`, { verified, note: note || undefined });
+      const idx = directory.value.findIndex(u => u?.id === userId);
+      if (idx >= 0 && updated?.id) directory.value[idx] = { ...directory.value[idx], ...updated };
+      return { ok: true, user: updated };
+    } catch (e) {
+      error.value = e.message || 'ثبت تأیید ناموفق بود';
+      return { ok: false, error: error.value };
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  async function setCustomerStatus(userId, status) {
+    if (!token.value) return { ok: false };
+    loading.value = true;
+    error.value = '';
+    try {
+      const updated = await api.post(`/users/${userId}/status`, { status });
+      const idx = directory.value.findIndex(u => u?.id === userId);
+      if (idx >= 0 && updated?.id) directory.value[idx] = { ...directory.value[idx], ...updated };
+      return { ok: true, user: updated };
+    } catch (e) {
+      error.value = e.message || 'تغییر وضعیت ناموفق بود';
+      return { ok: false, error: error.value };
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  // ── Broker manager: cash approvals ─────────────────────────────────────────
+  // `GET /wallet/pending` lists every pending deposit + withdrawal for the
+  // approval screens; the four decisions below credit, refund or close them.
+  const cashPending = ref({ deposits: [], withdrawals: [] });
+
+  function applyCashPending(data) {
+    const deposits = Array.isArray(data) ? [] : (data?.deposits ?? data?.pendingDeposits ?? []);
+    const withdrawals = Array.isArray(data) ? [] : (data?.withdrawals ?? data?.pendingWithdrawals ?? []);
+    // Some backends answer a flat list with a kind/type field instead.
+    if (Array.isArray(data)) {
+      for (const row of data) {
+        const kind = String(row?.kind ?? row?.type ?? '').toLowerCase();
+        if (kind.includes('withdraw')) withdrawals.push(row);
+        else deposits.push(row);
+      }
+    }
+    cashPending.value = { deposits, withdrawals };
+  }
+
+  async function fetchCashPending() {
+    if (!token.value) return false;
+    loading.value = true;
+    error.value = '';
+    try {
+      applyCashPending(await api.get('/wallet/pending'));
+      return true;
+    } catch (e) {
+      error.value = e.message || 'دریافت درخواست‌های نقدی ناموفق بود';
+      return false;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  async function decideCash(kind, id, approve, note = '') {
+    // kind: 'deposit' | 'withdrawal'
+    if (!token.value) return { ok: false };
+    loading.value = true;
+    error.value = '';
+    try {
+      const path = kind === 'withdrawal'
+        ? `/wallet/withdrawals/${id}/${approve ? 'approve' : 'reject'}`
+        : `/wallet/deposits/${id}/${approve ? 'approve' : 'reject'}`;
+      const result = approve
+        ? await api.post(path, {})
+        : await api.post(path, { note: note || undefined });
+      await fetchCashPending();
+      return { ok: true, result };
+    } catch (e) {
+      error.value = e.message || 'ثبت تصمیم ناموفق بود';
       return { ok: false, error: error.value };
     } finally {
       loading.value = false;
@@ -636,6 +731,11 @@ export const useAuthStore = defineStore('auth', () => {
     fetchDirectory,
     changeUserRole,
     createStaffUser,
+    setCustomerVerified,
+    setCustomerStatus,
+    cashPending,
+    fetchCashPending,
+    decideCash,
     logout,
   };
 });

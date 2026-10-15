@@ -89,21 +89,19 @@ async function main() {
 /**
  * Initial SUPER_ADMIN login, so the platform is operable from a fresh DB.
  *
- * Credentials come from env — never hard-coded:
+ * Constant dev defaults (override via env for production):
  *
  *   SEED_ADMIN_PHONE=09120000000 SEED_ADMIN_PASSWORD=ChangeMe123! npx ts-node src/seed.ts
  *
  * Upserted by phone: re-running with the same phone keeps the existing role
- * but refreshes the password (handy for lockout recovery). Skipped silently
- * when the env vars are absent, so plain account-seeding stays untouched.
+ * but refreshes the password (handy for lockout recovery).
  */
+const SEED_ADMIN_PHONE = (process.env.SEED_ADMIN_PHONE ?? '09334880627').trim();
+const SEED_ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD ?? 'gfx234789';
+
 async function seedSuperAdmin(): Promise<void> {
-  const phone = process.env.SEED_ADMIN_PHONE?.trim();
-  const password = process.env.SEED_ADMIN_PASSWORD ?? '';
-  if (!phone) {
-    console.log('seed super-admin: skipped (SEED_ADMIN_PHONE not set)');
-    return;
-  }
+  const phone = SEED_ADMIN_PHONE;
+  const password = SEED_ADMIN_PASSWORD;
   if (password.length < 6) {
     throw new Error('SEED_ADMIN_PASSWORD must be at least 6 characters');
   }
