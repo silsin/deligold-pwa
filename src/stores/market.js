@@ -109,11 +109,16 @@ export const useMarketStore = defineStore('market', () => {
     error.value = '';
     try {
       const data = await api.get('/market/board');
-      // Ensure symbols is always an array; if missing, keep existing or use fallback
+      
+      // Only update symbols if they actually changed (by comparing symbol IDs)
       if (Array.isArray(data.symbols) && data.symbols.length > 0) {
-        symbols.value = data.symbols;
+        const newSymbolIds = data.symbols.map(s => s.symbol).join(',')
+        const oldSymbolIds = symbols.value.map(s => s.symbol).join(',')
+        
+        if (newSymbolIds !== oldSymbolIds) {
+          symbols.value = data.symbols;
+        }
       } else if (!symbols.value || symbols.value.length === 0) {
-        // If we still have no symbols, log a warning but continue
         console.warn('No symbols received from API, symbols will remain empty');
       }
       

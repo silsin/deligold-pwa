@@ -185,9 +185,9 @@ import { faMoney, faWeight, faDelta, faTime, faJalaliDateTime } from '../utils/f
 function loadTickerPref() {
   try {
     const stored = localStorage.getItem('dg_show_ticker')
-    return stored === null ? true : stored === 'true'
+    return stored === null ? false : stored === 'true'
   } catch {
-    return true
+    return false
   }
 }
 
@@ -257,22 +257,31 @@ const goldEquivalent = computed(() => {
  * Customer home: just 2 buttons (buy/sell) for the featured symbol by
  * default. Customer enables more symbols from Settings → those rows appear.
  * Guests/staff always see the full read-only board.
+ * 
+ * CRITICAL: Use symbol IDs for filtering to avoid re-renders when market.symbols reference changes.
  */
 const boardPrefsTick = ref(0)
 const showAll = ref(false)
 const visibleRows = computed(() => {
   void boardPrefsTick.value
-  if (showAll.value) return market.symbols
+  const allSymbols = market.symbols
+  
+  if (!allSymbols || allSymbols.length === 0) return []
+  
+  if (showAll.value) return allSymbols
+  
   const visible = loadVisible()
   if (visible && visible.length) {
     const set = new Set(visible)
-    const rows = market.symbols.filter(s => set.has(s.symbol))
+    const rows = allSymbols.filter(s => set.has(s.symbol))
     if (rows.length) return rows
   }
+  
   const feat = loadFeatured(market.symbol || 'GOLD18')
-  const found = market.symbols.find(s => s.symbol === feat)
+  const found = allSymbols.find(s => s.symbol === feat)
   if (found) return [found]
-  return market.symbols.slice(0, 1)
+  
+  return allSymbols.slice(0, 1)
 })
 
 function refreshBoardPrefs() {

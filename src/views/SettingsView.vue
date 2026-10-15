@@ -119,9 +119,9 @@ import { faAgo, faPercent } from '../utils/format'
 function loadTickerPref() {
   try {
     const stored = localStorage.getItem('dg_show_ticker')
-    return stored === null ? true : stored === 'true'
+    return stored === null ? false : stored === 'true'
   } catch {
-    return true
+    return false
   }
 }
 
