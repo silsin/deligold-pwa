@@ -6,7 +6,6 @@
 </button>
       <div class="topbar__brand">
         <span class="topbar__logo">دلی گلد</span>
-        <span class="topbar__sub">معاملات طلا</span>
       </div>
       <div class="topbar__meta">
         <span v-if="market.stale" class="topbar__stale">داده قدیمی</span>
