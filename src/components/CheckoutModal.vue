@@ -1,4 +1,5 @@
 <template>
+  <Teleport to="body">
   <div v-if="open" class="checkout" role="dialog" aria-modal="true" aria-label="تأیید سفارش">
     <div class="checkout__scrim" @click="emit('cancel')"></div>
     <div class="checkout__panel" @click.stop>
@@ -72,6 +73,7 @@
       </div>
     </div>
   </div>
+  </Teleport>
 </template>
 
 <script setup>

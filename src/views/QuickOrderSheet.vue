@@ -1,10 +1,6 @@
 <template>
   <div v-if="open" class="sheet" role="dialog" aria-modal="true" :aria-label="title">
-    <div
-      class="sheet__scrim"
-      :style="{ pointerEvents: showCheckout || showDeposit ? 'none' : 'auto' }"
-      @click="emit('close')"
-    ></div>
+    <div class="sheet__scrim" @click="emit('close')"></div>
     <section class="sheet__panel" @click.stop>
       <span class="sheet__grip" aria-hidden="true"></span>
       <header class="sheet__head">
@@ -64,33 +60,28 @@
     </section>
   </div>
 
-  <!-- Modals must live outside the scrollable sheet panel — a fixed-position
-       child of an overflow:auto container loses its fixed stacking context on
-       iOS/Android and the overlay is clipped or unreachable.
-       Guard with open so they unmount when the whole sheet is closed. -->
-  <template v-if="open">
-    <CheckoutModal
-      :open="showCheckout"
-      :symbolName="pendingOrder?.symbolName ?? ''"
-      :side="pendingOrder?.side ?? props.side"
-      :grams="pendingOrder?.grams ?? 0"
-      :execPrice="pendingOrder?.execPrice ?? 0"
-      :orderFee="pendingOrder?.orderFee ?? 0"
-      :orderTotal="pendingOrder?.orderTotal ?? 0"
-      :netTotal="pendingOrder?.netTotal ?? 0"
-      :currentBalance="auth.balance"
-      :busy="busy"
-      @confirm="handleCheckoutConfirm"
-      @cancel="handleCheckoutCancel"
-    />
-    <DepositSheet
-      v-if="showDeposit"
-      :busy="depositBusy"
-      :initialAmount="depositAmount"
-      @close="handleDepositClose"
-      @submit="handleDepositSubmit"
-    />
-  </template>
+  <!-- Modals teleport to <body> so stacking context and overflow never clip them. -->
+  <CheckoutModal
+    :open="showCheckout"
+    :symbolName="pendingOrder?.symbolName ?? ''"
+    :side="pendingOrder?.side ?? props.side"
+    :grams="pendingOrder?.grams ?? 0"
+    :execPrice="pendingOrder?.execPrice ?? 0"
+    :orderFee="pendingOrder?.orderFee ?? 0"
+    :orderTotal="pendingOrder?.orderTotal ?? 0"
+    :netTotal="pendingOrder?.netTotal ?? 0"
+    :currentBalance="auth.balance"
+    :busy="busy"
+    @confirm="handleCheckoutConfirm"
+    @cancel="handleCheckoutCancel"
+  />
+  <DepositSheet
+    v-if="showDeposit"
+    :busy="depositBusy"
+    :initialAmount="depositAmount"
+    @close="handleDepositClose"
+    @submit="handleDepositSubmit"
+  />
 </template>
 
 <script setup>

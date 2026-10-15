@@ -1,4 +1,5 @@
 <template>
+  <Teleport to="body">
   <div class="sheet" role="dialog" aria-modal="true" aria-label="واریز به کیف پول">
     <div class="sheet__scrim" @click="emit('close')"></div>
 
@@ -111,6 +112,7 @@
       </p>
     </form>
   </div>
+  </Teleport>
 </template>
 
 <script setup>
