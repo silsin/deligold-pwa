@@ -1,0 +1,26 @@
+trade.ziva-vpn.online {
+    # Caddy auto-provisions and renews a Let's Encrypt TLS cert.
+    # No certbot, no cron, no manual renewal needed.
+
+    # Proxy everything to the delly-pwa nginx container.
+    # The pwa container already handles /api routes internally
+    # (nginx proxies /auth /trade /wallet etc. → delly-api).
+    reverse_proxy pwa:9741
+
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+
+    # Caddy access log — useful for debugging.
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 10mb
+            roll_keep 5
+        }
+    }
+}

@@ -1,0 +1,102 @@
+###############################################################################
+# delly — production compose for trade.ziva-vpn.online
+#
+#   cp .env.example .env        # fill in JWT_SECRET, MARKET_UID, MARKET_TOKEN
+#   docker compose -f docker-compose.prod.yml up --build -d
+#
+# Three containers:
+#   caddy  — TLS termination + reverse proxy (auto Let's Encrypt)
+#   pwa    — nginx serving the built Vue/Vite bundle, proxies API routes
+#   api    — NestJS + Prisma + SQLite
+#
+# The browser talks only to Caddy on 80/443.
+# Caddy forwards everything to pwa:9741.
+# pwa's nginx proxies /auth /trade /wallet etc. to api:7456.
+# The pwa and api containers are NOT published to the host — only Caddy is.
+###############################################################################
+
+services:
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: delly-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"      # HTTP/3
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data          # TLS certs — must persist across restarts
+      - caddy_config:/config
+      - caddy_logs:/var/log/caddy
+    depends_on:
+      - pwa
+    networks:
+      - delly
+
+  pwa:
+    build:
+      context: .
+      args:
+        # VITE_API_URL is empty: nginx proxies the API routes same-origin,
+        # so the bundle uses relative paths and CORS never comes into play.
+        VITE_API_URL: ""
+    image: delly-pwa:${IMAGE_TAG:-latest}
+    container_name: delly-pwa
+    restart: unless-stopped
+    # NOT published to the host — only reachable by Caddy inside the network.
+    expose:
+      - "9741"
+    environment:
+      PORT: 9741
+      API_UPSTREAM: http://api:7456
+      DNS_RESOLVER: 127.0.0.11
+    depends_on:
+      - api
+    networks:
+      - delly
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider",
+             "http://127.0.0.1:9741/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  api:
+    build: ./api
+    image: delly-api:${IMAGE_TAG:-latest}
+    container_name: delly-api
+    restart: unless-stopped
+    # NOT published to the host — only reachable by pwa inside the network.
+    expose:
+      - "7456"
+    environment:
+      PORT: 7456
+      DATABASE_URL: "file:/data/dev.db"
+      UPLOAD_DIR: /data/uploads
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      MARKET_UID: ${MARKET_UID:-}
+      MARKET_TOKEN: ${MARKET_TOKEN:-}
+    volumes:
+      - delly_data:/data
+    networks:
+      - delly
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider",
+             "http://127.0.0.1:7456/market/board"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 25s
+
+networks:
+  delly:
+    driver: bridge
+
+volumes:
+  delly_data:
+  caddy_data:
+  caddy_config:
+  caddy_logs:
