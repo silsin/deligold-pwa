@@ -45,9 +45,9 @@ services:
     image: delly-pwa:${IMAGE_TAG:-latest}
     container_name: delly-pwa
     restart: unless-stopped
-    # NOT published to the host — only reachable by Caddy inside the network.
-    expose:
-      - "9741"
+    # Published to host so the host nginx reverse proxy can reach it.
+    ports:
+      - "127.0.0.1:9741:9741"
     environment:
       PORT: 9741
       API_UPSTREAM: http://api:7456
