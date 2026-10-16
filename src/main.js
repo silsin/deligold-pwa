@@ -17,3 +17,13 @@ const app = createApp(App)
 app.config.globalProperties.openLogin = openLogin
 
 app.use(createPinia()).use(router).mount('#app')
+
+// Poll for SW updates every 60 s so long-running sessions get the new build
+// without waiting for the user to close and reopen the tab.
+if ('serviceWorker' in navigator) {
+  setInterval(() => {
+    navigator.serviceWorker.getRegistration().then(reg => {
+      if (reg) reg.update()
+    })
+  }, 60_000)
+}

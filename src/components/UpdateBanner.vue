@@ -4,9 +4,6 @@
       <i class="material-icons">system_update</i>
       <span>نسخه جدید در دسترس است</span>
       <button type="button" class="update-banner__btn" @click="applyUpdate">به‌روزرسانی</button>
-      <button type="button" class="update-banner__dismiss" aria-label="بستن" @click="needsUpdate = false">
-        <i class="material-icons">close</i>
-      </button>
     </div>
   </Transition>
 </template>
@@ -18,17 +15,17 @@ import { useRegisterSW } from 'virtual:pwa-register/vue'
 const needsUpdate = ref(false)
 
 const { updateServiceWorker } = useRegisterSW({
-  // Fires when a new SW is waiting — show the banner
+  // autoUpdate activates the SW automatically; this fires right after.
+  // Give the user a one-click reload button instead of a silent hard reload,
+  // so they are not confused mid-session by a sudden page refresh.
   onNeedRefresh() {
     needsUpdate.value = true
   },
-  // Already offline-ready (first install) — no banner needed
   onOfflineReady() {},
 })
 
 function applyUpdate() {
   needsUpdate.value = false
-  // Tell the waiting SW to skip waiting, then reload to get the new build
   updateServiceWorker(true)
 }
 </script>
@@ -74,21 +71,6 @@ function applyUpdate() {
   font-size: 12.5px;
   font-weight: 900;
   flex-shrink: 0;
-}
-
-.update-banner__dismiss {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.15);
-  flex-shrink: 0;
-}
-
-.update-banner__dismiss .material-icons {
-  font-size: 15px;
 }
 
 /* Slide up from below */
