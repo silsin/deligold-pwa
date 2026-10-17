@@ -87,12 +87,26 @@ export class WalletsService {
    *
    * The ledger records the cash arriving and the matching liability to the
    * customer, so «بستانکار» and «بدهکار» balance on every deposit.
+   * Scoped to the actor's broker.
    */
-  async approveDeposit(actorId: string, depositId: string): Promise<CashMoveView> {
-    const deposit = await this.prisma.deposit.findUnique({ where: { id: depositId } });
+  async approveDeposit(actor: { role: string; brokerId: string | null }, depositId: string): Promise<CashMoveView> {
+    const deposit = await this.prisma.deposit.findUnique({
+      where: { id: depositId },
+      include: { wallet: { include: { user: { select: { brokerId: true } } } } },
+    });
     if (!deposit) throw new TradeError('واریز یافت نشد', 404);
     if (deposit.status !== 'PENDING') {
       throw new TradeError('فقط واریزهای در انتظار قابل تأیید هستند');
+    }
+
+    // Check same broker
+    if (actor.role !== 'SUPER_ADMIN') {
+      if (
+        (deposit.wallet.user.brokerId ?? null) !==
+        (actor.brokerId ?? null)
+      ) {
+        throw new TradeError('این واریز متعلق به مشتری سازمان شما نیست', 403);
+      }
     }
 
     const amount = money(dec(deposit.amount));
@@ -104,7 +118,7 @@ export class WalletsService {
       });
       return tx.deposit.update({
         where: { id: depositId },
-        data: { status: 'APPROVED', approvedById: actorId, approvedAt: new Date() },
+        data: { status: 'APPROVED', approvedById: actor.role, approvedAt: new Date() },
       });
     });
 
@@ -124,11 +138,24 @@ export class WalletsService {
   }
 
   /** Rejects a pending deposit — the money never reached the platform. */
-  async rejectDeposit(depositId: string, note?: string): Promise<CashMoveView> {
-    const deposit = await this.prisma.deposit.findUnique({ where: { id: depositId } });
+  async rejectDeposit(actor: { role: string; brokerId: string | null }, depositId: string, note?: string): Promise<CashMoveView> {
+    const deposit = await this.prisma.deposit.findUnique({
+      where: { id: depositId },
+      include: { wallet: { include: { user: { select: { brokerId: true } } } } },
+    });
     if (!deposit) throw new TradeError('واریز یافت نشد', 404);
     if (deposit.status !== 'PENDING') {
       throw new TradeError('فقط واریزهای در انتظار قابل رد هستند');
+    }
+
+    // Check same broker
+    if (actor.role !== 'SUPER_ADMIN') {
+      if (
+        (deposit.wallet.user.brokerId ?? null) !==
+        (actor.brokerId ?? null)
+      ) {
+        throw new TradeError('این واریز متعلق به مشتری سازمان شما نیست', 403);
+      }
     }
 
     const updated = await this.prisma.deposit.update({
@@ -216,17 +243,30 @@ export class WalletsService {
     return this.withdrawalView(row);
   }
 
-  /** Marks a withdrawal as paid out, clearing the payable. */
-  async approveWithdrawal(actorId: string, withdrawalId: string): Promise<CashMoveView> {
-    const w = await this.prisma.withdrawal.findUnique({ where: { id: withdrawalId } });
+  /** Marks a withdrawal as paid out, clearing the payable (scoped by broker). */
+  async approveWithdrawal(actor: { role: string; brokerId: string | null }, withdrawalId: string): Promise<CashMoveView> {
+    const w = await this.prisma.withdrawal.findUnique({
+      where: { id: withdrawalId },
+      include: { wallet: { include: { user: { select: { brokerId: true } } } } },
+    });
     if (!w) throw new TradeError('برداشت یافت نشد', 404);
     if (w.status !== 'PENDING') {
       throw new TradeError('فقط برداشت‌های در انتظار قابل تأیید هستند');
     }
 
+    // Check same broker
+    if (actor.role !== 'SUPER_ADMIN') {
+      if (
+        (w.wallet.user.brokerId ?? null) !==
+        (actor.brokerId ?? null)
+      ) {
+        throw new TradeError('این برداشت متعلق به مشتری سازمان شما نیست', 403);
+      }
+    }
+
     const updated = await this.prisma.withdrawal.update({
       where: { id: withdrawalId },
-      data: { status: 'APPROVED', approvedById: actorId, approvedAt: new Date() },
+      data: { status: 'APPROVED', approvedById: actor.role, approvedAt: new Date() },
     });
 
     const cash = await this.accounts.find(ACCOUNTS.CASH);
@@ -246,16 +286,30 @@ export class WalletsService {
   }
 
   /**
-   * Refuses a withdrawal and returns the money to the customer's balance.
+   * Refuses a withdrawal and returns the money to the customer's balance
+   * (scoped by broker).
    *
    * The refund matters: the balance was taken at request time, so rejecting
    * without crediting it back would silently destroy the customer's money.
    */
-  async rejectWithdrawal(withdrawalId: string, note?: string): Promise<CashMoveView> {
-    const w = await this.prisma.withdrawal.findUnique({ where: { id: withdrawalId } });
+  async rejectWithdrawal(actor: { role: string; brokerId: string | null }, withdrawalId: string, note?: string): Promise<CashMoveView> {
+    const w = await this.prisma.withdrawal.findUnique({
+      where: { id: withdrawalId },
+      include: { wallet: { include: { user: { select: { brokerId: true } } } } },
+    });
     if (!w) throw new TradeError('برداشت یافت نشد', 404);
     if (w.status !== 'PENDING') {
       throw new TradeError('فقط برداشت‌های در انتظار قابل رد هستند');
+    }
+
+    // Check same broker
+    if (actor.role !== 'SUPER_ADMIN') {
+      if (
+        (w.wallet.user.brokerId ?? null) !==
+        (actor.brokerId ?? null)
+      ) {
+        throw new TradeError('این برداشت متعلق به مشتری سازمان شما نیست', 403);
+      }
     }
 
     const gross = money(dec(w.amount) + dec(w.fee));
@@ -297,20 +351,40 @@ export class WalletsService {
     return rows.map(r => this.withdrawalView(r));
   }
 
-  /** Staff: every pending cash movement, for the approval screens. */
-  async pending(): Promise<{ deposits: CashMoveView[]; withdrawals: CashMoveView[] }> {
+  /** Staff: every pending cash movement, for the approval screens (scoped by broker). */
+  async pending(actor: { role: string; brokerId: string | null }): Promise<{ deposits: CashMoveView[]; withdrawals: CashMoveView[] }> {
+    const scope =
+      actor.role === 'SUPER_ADMIN'
+        ? {}
+        : { wallet: { user: { brokerId: actor.brokerId ?? '__no_broker__' } } };
+
     const [deposits, withdrawals] = await Promise.all([
       this.prisma.deposit.findMany({
-        where: { status: 'PENDING' },
+        where: { status: 'PENDING', ...scope },
+        include: {
+          wallet: {
+            include: {
+              user: { select: { id: true, name: true, phone: true } },
+            },
+          },
+        },
         orderBy: { createdAt: 'asc' },
         take: 200,
       }),
       this.prisma.withdrawal.findMany({
-        where: { status: 'PENDING' },
+        where: { status: 'PENDING', ...scope },
+        include: {
+          wallet: {
+            include: {
+              user: { select: { id: true, name: true, phone: true } },
+            },
+          },
+        },
         orderBy: { createdAt: 'asc' },
         take: 200,
       }),
     ]);
+
     return {
       deposits: deposits.map(d => this.depositView(d)),
       withdrawals: withdrawals.map(w => this.withdrawalView(w)),

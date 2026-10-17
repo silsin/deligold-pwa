@@ -100,38 +100,38 @@ export class WalletsController {
 
   // ── Staff ─────────────────────────────────────────────────────────────────
 
-  /** Every pending deposit and withdrawal, for the approval screens. */
+  /** Every pending deposit and withdrawal, for the approval screens (scoped by broker). */
   @Roles(...STAFF)
   @Get('pending')
-  pending() {
-    return this.wallets.pending();
+  pending(@CurrentUser() user: AuthUser) {
+    return this.wallets.pending(user);
   }
 
   /** Confirms the money arrived, crediting the customer's balance. */
   @Roles(...STAFF)
   @Post('deposits/:id/approve')
   approveDeposit(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.wallets.approveDeposit(user.userId, id);
+    return this.wallets.approveDeposit(user, id);
   }
 
   /** Refuses a deposit — the money never reached the platform. */
   @Roles(...STAFF)
   @Post('deposits/:id/reject')
-  rejectDeposit(@Param('id') id: string, @Body() body: { note?: string }) {
-    return this.wallets.rejectDeposit(id, body?.note);
+  rejectDeposit(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: { note?: string }) {
+    return this.wallets.rejectDeposit(user, id, body?.note);
   }
 
   /** Marks a withdrawal as sent, clearing the payable. */
   @Roles(...STAFF)
   @Post('withdrawals/:id/approve')
   approveWithdrawal(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.wallets.approveWithdrawal(user.userId, id);
+    return this.wallets.approveWithdrawal(user, id);
   }
 
   /** Refuses a withdrawal and returns the money to the customer's balance. */
   @Roles(...STAFF)
   @Post('withdrawals/:id/reject')
-  rejectWithdrawal(@Param('id') id: string, @Body() body: { note?: string }) {
-    return this.wallets.rejectWithdrawal(id, body?.note);
+  rejectWithdrawal(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() body: { note?: string }) {
+    return this.wallets.rejectWithdrawal(user, id, body?.note);
   }
 }
