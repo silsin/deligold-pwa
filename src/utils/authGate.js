@@ -11,6 +11,9 @@ import { reactive } from 'vue'
  * The `returnTo` path lets a guard remember where the guest was heading so
  * the sheet can land them there after a successful sign-in.
  *
+ * `pendingInvite` holds invite details when a visitor arrived via ?invite=
+ * and needs to register. The register form pre-fills the broker name.
+ *
  * IMPORTANT: this is a `reactive()` object holding *plain values*, not an
  * object of `ref()`. Templates read/write `authGate.mode = 'register'`
  * directly, and only a reactive proxy unwraps and tracks that. Wrapping refs
@@ -21,6 +24,7 @@ export const authGate = reactive({
   open: false,
   mode: 'login',
   returnTo: null,
+  pendingInvite: null,
 
   /** Raise the sheet. `preferred` is the tab to open on. */
   openLogin(preferred = 'login', backTo = null) {
@@ -32,6 +36,7 @@ export const authGate = reactive({
   closeLogin() {
     this.open = false
     this.returnTo = null
+    this.pendingInvite = null
   },
 
   /** Called after a successful login/register — hands back the pending path. */

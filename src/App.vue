@@ -94,6 +94,9 @@ import TermsModal from './components/TermsModal.vue'
 import UpdateBanner from './components/UpdateBanner.vue'
 import { applyPalette, loadPaletteId } from './theme'
 import { faMoney, faTime, termsAccepted } from './utils/format'
+import { readInviteCode } from './utils/invite.js'
+import { openLogin, authGate } from './utils/authGate.js'
+import { api } from './utils/api.js'
 
 const market = useMarketStore()
 const auth = useAuthStore()
@@ -106,11 +109,34 @@ function tick() {
   clock.value = faTime(Date.now())
 }
 
+async function handleInviteCode() {
+  const code = readInviteCode()
+  if (!code || auth.isLoggedIn) return
+
+  try {
+    const res = await api.get(`/invites/${code}`)
+    if (res.data) {
+      authGate.pendingInvite = {
+        code,
+        brokerName: res.data.brokerName,
+      }
+      openLogin('register')
+    }
+  } catch (e) {
+    // Invalid invite code — show error in auth sheet
+    authGate.pendingInvite = null
+  }
+}
+
 onMounted(() => {
   applyPalette(loadPaletteId())
   showTerms.value = !termsAccepted()
   tick()
   timer = setInterval(tick, 1000)
+  
+  // Check for ?invite= before restoring session
+  handleInviteCode()
+
   // Restore the persisted session: a stored token means "still logged in".
   // Without this the guard sees an empty user and every reopen looks logged out
   // until something happens to fetch the profile.
