@@ -108,6 +108,36 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
+    // Resolve invite if provided (public self-registration only)
+    let brokerId: string | null = null;
+    let redeemedInviteId: string | null = null;
+
+    if (!actor && dto.inviteCode) {
+      const invite = await this.prisma.invite.findUnique({
+        where: { code: dto.inviteCode.trim().toUpperCase() },
+      });
+
+      if (!invite) {
+        throw new TradeError('کد دعوت یافت نشد', 404);
+      }
+
+      if (!invite.active) {
+        throw new TradeError('این کد دعوت غیرفعال است', 400);
+      }
+
+      const now = new Date();
+      if (invite.expiresAt && invite.expiresAt < now) {
+        throw new TradeError('کد دعوت منقضی شده است', 400);
+      }
+
+      if (invite.maxUses != null && invite.uses >= invite.maxUses) {
+        throw new TradeError('ظرفیت این کد دعوت تکمیل شده است', 400);
+      }
+
+      brokerId = invite.brokerId;
+      redeemedInviteId = invite.id;
+    }
+
     const user = await this.prisma.$transaction(async tx => {
       const created = await tx.user.create({
         data: {
@@ -120,11 +150,30 @@ export class AuthService {
           // that is what routes their first buys through the receipt flow.
           status: 'ACTIVE',
           createdById: actor?.userId ?? null,
+          brokerId,
+          redeemedInviteId,
         },
       });
       // Every account gets a wallet on day one, so the first screen after
       // sign-up shows a balance rather than an error.
       await tx.wallet.create({ data: { userId: created.id } });
+
+      // If redeemed an invite, increment its uses
+      if (redeemedInviteId) {
+        const updated = await tx.invite.update({
+          where: { id: redeemedInviteId },
+          data: { uses: { increment: 1 } },
+        });
+
+        // Re-check exhaustion in the transaction
+        if (
+          updated.maxUses != null &&
+          updated.uses > updated.maxUses
+        ) {
+          throw new TradeError('ظرفیت این کد دعوت تکمیل شده است', 400);
+        }
+      }
+
       return created;
     });
 

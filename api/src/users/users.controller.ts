@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Put } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { CurrentUser, type AuthUser } from '../auth/current-user.decorator';
 import { Roles } from '../auth/roles.decorator';
 import { UsersService } from './users.service';
 import { ChangeRoleDto, CreateUserDto, UpdateProfileDto } from './dto/users.dto';
+import { PermissionsService, PermissionView, PermissionItem } from '../permissions/permissions.service';
 
 /** Staff roles: everyone except a plain customer. */
 const STAFF = [Role.BROKER_MANAGER, Role.BROKER_ADMIN, Role.SUPER_ADMIN] as const;
@@ -17,7 +18,10 @@ const STAFF = [Role.BROKER_MANAGER, Role.BROKER_ADMIN, Role.SUPER_ADMIN] as cons
  */
 @Controller('users')
 export class UsersController {
-  constructor(private readonly users: UsersService) {}
+  constructor(
+    private readonly users: UsersService,
+    private readonly permissions: PermissionsService,
+  ) {}
 
   // ── Own profile ───────────────────────────────────────────────────────────
 
@@ -112,5 +116,32 @@ export class UsersController {
     @Body() body: { status: 'ACTIVE' | 'SUSPENDED' | 'PENDING' },
   ) {
     return this.users.setStatus(user, id, body.status);
+  }
+
+  // ── Customer permissions ──────────────────────────────────────────────────
+
+  /**
+   * Get per-symbol trade permissions for a customer.
+   */
+  @Roles(...STAFF)
+  @Get(':id/permissions')
+  getPermissions(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+  ): Promise<PermissionView[]> {
+    return this.permissions.listForUser(user, id);
+  }
+
+  /**
+   * Set per-symbol trade permissions for a customer.
+   */
+  @Roles(...STAFF)
+  @Put(':id/permissions')
+  setPermissions(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() body: { items: PermissionItem[] },
+  ): Promise<PermissionView[]> {
+    return this.permissions.setForUser(user, id, body.items);
   }
 }

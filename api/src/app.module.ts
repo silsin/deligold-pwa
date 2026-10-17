@@ -10,6 +10,8 @@ import { TradingModule } from './trading/trading.module';
 import { AccountingModule } from './accounting/accounting.module';
 import { ReportsModule } from './reports/reports.module';
 import { StoresModule } from './stores/stores.module';
+import { InvitesModule } from './invites/invites.module';
+import { PermissionsModule } from './permissions/permissions.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 
@@ -25,6 +27,8 @@ import { RolesGuard } from './auth/guards/roles.guard';
     AccountingModule,
     ReportsModule,
     StoresModule,
+    InvitesModule,
+    PermissionsModule,
   ],
   providers: [
     // Order matters: JwtAuthGuard attaches the user, then RolesGuard reads it.

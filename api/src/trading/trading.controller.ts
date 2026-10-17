@@ -81,6 +81,16 @@ export class TradingController {
   // ── Broker manager ────────────────────────────────────────────────────────
 
   /**
+   * Staff overview: a customer's wallet, positions, and recent orders.
+   * Scoped to the caller's own organisation inside the service.
+   */
+  @Roles(...STAFF)
+  @Get('customers/:id/overview')
+  customerOverview(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.trading.customerOverview(user, id);
+  }
+
+  /**
    * The review queue: every MANUAL order in this broker waiting on a receipt
    * check. Scoped to the caller's own organisation inside the service.
    */

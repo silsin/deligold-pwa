@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AccountsService, ACCOUNTS } from '../accounting/accounts.service';
 import { LedgerService } from '../accounting/ledger.service';
 import { MarketService } from '../market/market.service';
+import { PermissionsService } from '../permissions/permissions.service';
 import { isTradeSymbol, symbolMeta } from '../market/symbols';
 import { InsufficientFundsError, TradeError } from '../common/errors';
 import { EPSILON, dec, feeFor, grams as roundGrams, money, weightedAvgCost } from '../common/money';
@@ -114,6 +115,7 @@ export class TradingService {
     private readonly market: MarketService,
     private readonly accounts: AccountsService,
     private readonly ledger: LedgerService,
+    private readonly permissions: PermissionsService,
   ) {}
 
   // ── Reads ─────────────────────────────────────────────────────────────────
@@ -188,6 +190,68 @@ export class TradingService {
     return toOrderView(row);
   }
 
+  /**
+   * Staff overview: a customer's wallet, positions, and recent orders.
+   * Reuses the existing position/order marking so the manager sees the same
+   * live numbers the customer sees.
+   */
+  async customerOverview(
+    actor: { userId: string; role: string; brokerId: string | null },
+    id: string,
+  ): Promise<{
+    user: { id: string; name: string | null; phone: string | null; role: string; verified: boolean; status: string; createdAt: Date };
+    wallet: WalletView;
+    positions: PositionView[];
+    orders: OrderView[];
+  }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        role: true,
+        brokerId: true,
+        verifiedAt: true,
+        status: true,
+        createdAt: true,
+      },
+    });
+
+    if (!user) throw new TradeError('کاربر یافت نشد', 404);
+
+    // Check same broker
+    if (actor.role !== 'SUPER_ADMIN') {
+      if ((user.brokerId ?? null) !== (actor.brokerId ?? null)) {
+        throw new TradeError('این کاربر متعلق به سازمان شما نیست', 403);
+      }
+    }
+
+    // Require customer role
+    if (user.role !== 'CUSTOMER') {
+      throw new TradeError('این کاربر مشتری نیست', 400);
+    }
+
+    const wallet = await this.wallet(id);
+    const positions = await this.positions(id);
+    const orders = await this.myOrders(id, 20);
+
+    return {
+      user: {
+        id: user.id,
+        name: user.name,
+        phone: user.phone,
+        role: user.role,
+        verified: user.verifiedAt !== null,
+        status: user.status,
+        createdAt: user.createdAt,
+      },
+      wallet,
+      positions,
+      orders,
+    };
+  }
+
   // ── Trading ───────────────────────────────────────────────────────────────
 
   /**
@@ -223,6 +287,9 @@ export class TradingService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new TradeError('کاربر یافت نشد', 404);
     if (user.status !== 'ACTIVE') throw new TradeError('حساب شما فعال نیست', 403);
+
+    // Check trade permissions (customer permission check)
+    await this.permissions.canTrade(userId, symbol, side);
 
     const verified = user.verifiedAt !== null;
 

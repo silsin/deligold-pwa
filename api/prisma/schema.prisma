@@ -78,6 +78,16 @@ model User {
   createdBy   User?    @relation("UserCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   createdUsers User[]  @relation("UserCreatedBy")
 
+  /// The invite this customer redeemed at sign-up, if any.
+  redeemedInviteId String?
+  redeemedInvite   Invite?  @relation("InviteRedeemedBy", fields: [redeemedInviteId], references: [id], onDelete: SetNull)
+  /// Invites this user has created (managers/admins).
+  createdInvites   Invite[] @relation("InviteCreatedBy")
+  /// Per-symbol trade permissions set on this customer.
+  customerPermissions CustomerPermission[]
+  /// Permission rows this user has edited (audit).
+  permissionUpdates   CustomerPermission[] @relation("PermissionUpdatedBy")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -102,6 +112,8 @@ model Broker {
   stores    Store[]
   users     User[]
   accounts  Account[]
+  /// Invite codes generated for this organisation.
+  invites   Invite[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -132,6 +144,57 @@ model Session {
   expiresAt DateTime
   createdAt DateTime @default(now())
 
+  @@index([userId])
+}
+
+// ── Invites & permissions ───────────────────────────────────────────────────
+
+/// A shareable code that registers a new CUSTOMER into one broker.
+/// Scanned from a QR / link on the PWA; redeemed once per new sign-up.
+model Invite {
+  id         String    @id @default(uuid())
+  /// Short code embedded in the invite URL, e.g. "AB3X9KQ2". Unique.
+  code       String    @unique
+  brokerId   String
+  broker     Broker    @relation(fields: [brokerId], references: [id], onDelete: Cascade)
+  /// Who created the invite, for the audit trail. Nullable so deleting the
+  /// creator does not cascade-delete the invite history.
+  createdById String?
+  createdBy   User?    @relation("InviteCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  /// Optional expiry; null = never expires.
+  expiresAt  DateTime?
+  /// Optional cap on redemptions; null = unlimited.
+  maxUses    Int?
+  /// Redemptions so far. Incremented atomically inside the register transaction.
+  uses       Int       @default(0)
+  /// Soft-disable so a manager can retire a code without losing its history.
+  active     Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  /// The customers who registered through this invite.
+  users      User[]    @relation("InviteRedeemedBy")
+
+  @@index([brokerId])
+}
+
+/// Per-customer trade permission for one symbol. Absence = allowed (default),
+/// so the whole customer base is unrestricted until a manager restricts a
+/// symbol. The trading service reads this on every order.
+model CustomerPermission {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  symbol    String
+  allowBuy  Boolean  @default(true)
+  allowSell Boolean  @default(true)
+  /// Who last changed this permission, for the audit trail.
+  updatedById String?
+  updatedBy   User?  @relation("PermissionUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedAt DateTime @updatedAt
+
+  /// One permission row per customer per symbol.
+  @@unique([userId, symbol])
   @@index([userId])
 }
 

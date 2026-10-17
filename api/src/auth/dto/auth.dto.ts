@@ -52,6 +52,14 @@ export class RegisterDto {
   @IsOptional()
   @IsEnum(Role)
   role?: Role;
+
+  /**
+   * Invite code for self-registration into a broker.
+   */
+  @IsOptional()
+  @IsString()
+  @Matches(/^[A-Z2-9]{4,16}$/i, { message: 'کد دعوت نامعتبر است' })
+  inviteCode?: string;
 }
 
 export class LoginDto {
