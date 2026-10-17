@@ -70,29 +70,6 @@
       </button>
     </section>
 
-    <section class="block">
-      <h2 class="section-title">به‌روزرسانی خودکار</h2>
-      <label class="switch">
-        <input v-model="autoRefresh" type="checkbox" @change="togglePolling" />
-        <span class="switch__track"><span class="switch__knob"></span></span>
-        <span class="switch__text">
-          دریافت قیمت هر ۱۵ ثانیه
-          <small v-if="market.updatedAt">آخرین داده: {{ faAgo(market.updatedAt) }}</small>
-        </span>
-      </label>
-      <button type="button" class="btn btn--ghost btn--block" @click="refresh">
-        به‌روزرسانی دستی
-      </button>
-    </section>
-
-    <section class="block">
-      <h2 class="section-title">منبع قیمت</h2>
-      <div class="source">
-        <span class="source__dot" :class="market.stale ? 'is-stale' : 'is-live'"></span>
-        <span>{{ market.sourceTitle || 'در حال دریافت…' }}</span>
-      </div>
-      <p v-if="market.note" class="warn">{{ market.note }}</p>
-    </section>
 
     <section class="block">
       <h2 class="section-title">درباره</h2>

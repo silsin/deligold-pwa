@@ -33,7 +33,6 @@
       <div class="board__update">
         <span class="board__update-label">آخرین آپدیت قیمت</span>
         <span class="board__update-time">{{ faJalaliDateTime(market.updatedAt) }}</span>
-        <span v-if="market.stale" class="board__stale">کش قدیمی</span>
       </div>
 
       <!-- Column headers -->

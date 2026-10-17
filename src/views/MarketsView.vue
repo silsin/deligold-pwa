@@ -25,12 +25,6 @@
       </li>
     </ul>
 
-    <div class="source">
-      <span class="source__dot" :class="market.stale ? 'is-stale' : 'is-live'"></span>
-      <span>{{ market.sourceTitle || '—' }}</span>
-      <span class="muted">· {{ faAgo(market.updatedAt) }}</span>
-    </div>
-
     <p v-if="market.note" class="warn">{{ market.note }}</p>
   </div>
 </template>
