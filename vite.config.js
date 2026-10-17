@@ -37,7 +37,7 @@ export default defineConfig({
         clientsClaim: true,
         globPatterns: ['**/*.{js,css,ico,png,svg,woff2}'],
         // Market data must never be served stale from the cache.
-        navigateFallbackDenylist: [/^\/(auth|users|trade|wallet|market|reports|stores|uploads)\//],
+        navigateFallbackDenylist: [/^\/(auth|users|invites|trade|wallet|market|reports|stores|uploads)\//],
         runtimeCaching: [
           {
             urlPattern: /\/market\/board/,
@@ -58,11 +58,12 @@ export default defineConfig({
     host: '0.0.0.0',
     proxy: {
       // Dev only: forward every NestJS route to delly-api (default port 7456)
-      // so the PWA stays same-origin and avoids CORS. Routes: /auth, /users,
+      // so the PWA stays same-origin and avoids CORS. Routes: /auth, /users, /invites,
       // /trade, /wallet, /market, /reports, /stores, /uploads. DG_API_TARGET
       // overrides the target (docker-compose dev passes host.docker.internal).
       '/auth': { target: DG_API_TARGET, changeOrigin: true },
       '/users': { target: DG_API_TARGET, changeOrigin: true },
+      '/invites': { target: DG_API_TARGET, changeOrigin: true },
       '/trade': { target: DG_API_TARGET, changeOrigin: true },
       '/wallet': { target: DG_API_TARGET, changeOrigin: true },
       '/market': { target: DG_API_TARGET, changeOrigin: true },

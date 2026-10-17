@@ -137,12 +137,14 @@ export const useAuthStore = defineStore('auth', () => {
     else if (Array.isArray(data?.orders)) orders.value = data.orders;
   }
 
-  async function register(phone, password, name, nationalId) {
+  async function register(phone, password, name, nationalId, inviteCode) {
     loading.value = true;
     error.value = '';
     try {
       const payload = { phone, password, name };
       if (nationalId) payload.nationalId = nationalId;
+      // Joins the broker that issued the invite (public self-registration only).
+      if (inviteCode) payload.inviteCode = inviteCode;
       const data = await api.post('/auth/register', payload);
       token.value = data.accessToken;
       setToken(data.accessToken);

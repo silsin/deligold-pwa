@@ -28,9 +28,9 @@ export const useCustomersStore = defineStore('customers', () => {
     invitesError.value = '';
     try {
       const res = await api.get('/invites');
-      invites.value = res.data || [];
+      invites.value = (Array.isArray(res) ? res : []);
     } catch (e) {
-      invitesError.value = e.response?.data?.message || 'خطای بارگذاری دعوت‌نامه‌ها';
+      invitesError.value = e.message || 'خطای بارگذاری دعوت‌نامه‌ها';
     } finally {
       invitesLoading.value = false;
     }
@@ -44,10 +44,10 @@ export const useCustomersStore = defineStore('customers', () => {
     invitesError.value = '';
     try {
       const res = await api.post('/invites', dto);
-      invites.value.unshift(res.data);
-      return res.data;
+      invites.value.unshift(res);
+      return res;
     } catch (e) {
-      invitesError.value = e.response?.data?.message || 'خطای ایجاد دعوت‌نامه';
+      invitesError.value = e.message || 'خطای ایجاد دعوت‌نامه';
       throw e;
     } finally {
       invitesLoading.value = false;
@@ -64,11 +64,11 @@ export const useCustomersStore = defineStore('customers', () => {
       const res = await api.patch(`/invites/${id}`, dto);
       const idx = invites.value.findIndex(i => i.id === id);
       if (idx >= 0) {
-        invites.value[idx] = res.data;
+        invites.value[idx] = res;
       }
-      return res.data;
+      return res;
     } catch (e) {
-      invitesError.value = e.response?.data?.message || 'خطای به‌روزرسانی دعوت‌نامه';
+      invitesError.value = e.message || 'خطای به‌روزرسانی دعوت‌نامه';
       throw e;
     } finally {
       invitesLoading.value = false;
@@ -83,9 +83,9 @@ export const useCustomersStore = defineStore('customers', () => {
     permissionsError.value = '';
     try {
       const res = await api.get(`/users/${userId}/permissions`);
-      permissions.value = res.data || [];
+      permissions.value = (Array.isArray(res) ? res : []);
     } catch (e) {
-      permissionsError.value = e.response?.data?.message || 'خطای بارگذاری دسترسی‌ها';
+      permissionsError.value = e.message || 'خطای بارگذاری دسترسی‌ها';
     } finally {
       permissionsLoading.value = false;
     }
@@ -99,10 +99,10 @@ export const useCustomersStore = defineStore('customers', () => {
     permissionsError.value = '';
     try {
       const res = await api.put(`/users/${userId}/permissions`, { items });
-      permissions.value = res.data || [];
-      return res.data;
+      permissions.value = (Array.isArray(res) ? res : []);
+      return res;
     } catch (e) {
-      permissionsError.value = e.response?.data?.message || 'خطای ذخیره دسترسی‌ها';
+      permissionsError.value = e.message || 'خطای ذخیره دسترسی‌ها';
       throw e;
     } finally {
       permissionsLoading.value = false;
@@ -115,8 +115,8 @@ export const useCustomersStore = defineStore('customers', () => {
   async function fetchOverview(userId) {
     try {
       const res = await api.get(`/trade/customers/${userId}/overview`);
-      overview.value = res.data;
-      return res.data;
+      overview.value = res;
+      return res;
     } catch (e) {
       throw e;
     }

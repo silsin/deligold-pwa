@@ -46,6 +46,18 @@
           </label>
 
           <template v-if="authGate.mode === 'register'">
+            <div
+              v-if="authGate.pendingInvite"
+              class="sheet__invite"
+              :class="{ 'is-bad': !authGate.pendingInvite.valid }"
+              role="status"
+            >
+              <span class="material-icons">{{ authGate.pendingInvite.valid ? 'how_to_reg' : 'link_off' }}</span>
+              <span v-if="authGate.pendingInvite.valid">
+                دعوت‌نامه از <b>{{ authGate.pendingInvite.brokerName || 'کارگزاری' }}</b>
+              </span>
+              <span v-else>{{ authGate.pendingInvite.reason }} — ثبت‌نام بدون دعوت‌نامه انجام می‌شود.</span>
+            </div>
             <label class="sheet__field">
               <span>نام</span>
               <input v-model="name" type="text" autocomplete="name" placeholder="نام و نام خانوادگی" />
@@ -142,7 +154,13 @@ onBeforeUnmount(() => {
 async function submit() {
   const ok =
     authGate.mode === 'register'
-      ? await auth.register(phone.value.trim(), password.value, name.value.trim(), nationalId.value.trim())
+      ? await auth.register(
+          phone.value.trim(),
+          password.value,
+          name.value.trim(),
+          nationalId.value.trim(),
+          authGate.pendingInvite?.valid ? authGate.pendingInvite.code : undefined
+        )
       : await auth.login(phone.value.trim(), password.value)
 
   if (!ok) return
@@ -273,6 +291,33 @@ async function submit() {
 .sheet__field input:focus {
   outline: none;
   border-color: var(--accent);
+}
+
+.sheet__invite {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--card));
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+.sheet__invite .material-icons {
+  font-size: 20px;
+  color: var(--accent);
+}
+
+.sheet__invite.is-bad {
+  border-color: var(--down);
+  background: var(--down-soft);
+}
+
+.sheet__invite.is-bad .material-icons {
+  color: var(--down);
 }
 
 .sheet__error {

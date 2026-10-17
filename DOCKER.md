@@ -28,7 +28,7 @@ Two containers, and nothing else to install, configure, or point at each other:
 
 - `pwa` build arg `VITE_API_URL` is **empty on purpose**. `API_UPSTREAM=http://api:7456`
   makes its nginx reverse-proxy the eight NestJS routes
-  (`/auth /users /trade /wallet /market /reports /stores /uploads`) to the `api`
+  (`/auth /users /invites /trade /wallet /market /reports /stores /uploads`) to the `api`
   container, so the browser stays **same-origin** and CORS never comes into play.
 - The target is resolved **per request** through Docker's embedded DNS
   (`DNS_RESOLVER=127.0.0.11`), so the order the two containers start in does not

@@ -5,7 +5,7 @@
 #     PWA:  http://localhost:9741
 #     API:  http://localhost:7456   (internal via the pwa proxy; also published)
 #
-# The pwa container's nginx proxies the eight NestJS routes (/auth /users /trade
+# The pwa container's nginx proxies the nine NestJS routes (/auth /users /invites /trade
 # /wallet /market /reports /stores /uploads) to the api service at request time,
 # so the browser stays same-origin and needs no CORS. Data (SQLite DB + uploaded
 # receipts) lives on the delly_data volume and survives rebuilds.

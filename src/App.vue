@@ -76,7 +76,7 @@
     <LoginSheet />
 
     <!-- First-visit gate: manager terms must be acknowledged once per device. -->
-    <TermsModal v-if="showTerms" required @close="showTerms = false" />
+    <TermsModal v-if="showTerms" required @close="onTermsClosed" />
 
     <!-- PWA update banner — appears when a new build is deployed -->
     <UpdateBanner />
@@ -103,6 +103,15 @@ const auth = useAuthStore()
 const clock = ref('')
 const drawerOpen = ref(false)
 const showTerms = ref(false)
+let inviteWaitsForTerms = false
+
+function onTermsClosed() {
+  showTerms.value = false
+  if (inviteWaitsForTerms) {
+    inviteWaitsForTerms = false
+    openLogin('register')
+  }
+}
 let timer = null
 
 function tick() {
@@ -113,19 +122,33 @@ async function handleInviteCode() {
   const code = readInviteCode()
   if (!code || auth.isLoggedIn) return
 
+  // The api interceptor already unwraps `{ success, data }`, so the lookup view
+  // is the resolved value itself.
+  let info = null
   try {
-    const res = await api.get(`/invites/${code}`)
-    if (res.data) {
-      authGate.pendingInvite = {
-        code,
-        brokerName: res.data.brokerName,
-      }
-      openLogin('register')
-    }
-  } catch (e) {
-    // Invalid invite code — show error in auth sheet
-    authGate.pendingInvite = null
+    info = await api.get(`/invites/${code}`)
+  } catch {
+    // Unknown code — still open the register sheet, flagged, so the visitor
+    // learns the link is dead instead of nothing happening.
   }
+  authGate.pendingInvite = {
+    code,
+    brokerName: info?.brokerName || '',
+    valid: !!info?.valid,
+    reason: !info
+      ? 'کد دعوت یافت نشد'
+      : info.valid
+        ? ''
+        : !info.active
+          ? 'این کد دعوت غیرفعال است'
+          : info.expired
+            ? 'کد دعوت منقضی شده است'
+            : 'ظرفیت این کد دعوت تکمیل شده است',
+  }
+  // An invitee is always a first-time visitor, so the required terms modal is
+  // usually up too — raise the register sheet only once it has been accepted.
+  if (showTerms.value) inviteWaitsForTerms = true
+  else openLogin('register')
 }
 
 onMounted(() => {

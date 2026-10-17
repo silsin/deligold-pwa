@@ -72,6 +72,9 @@
             <button type="button" class="drawer__item" @click="go('/review')">
               <i class="material-icons">fact_check</i> صف بررسی
             </button>
+            <button type="button" class="drawer__item" @click="go('/customers')">
+              <i class="material-icons">groups</i> مشتریان
+            </button>
             <button type="button" class="drawer__item" @click="go('/desk')">
               <i class="material-icons">support_agent</i> میز کارگزاری
             </button>
