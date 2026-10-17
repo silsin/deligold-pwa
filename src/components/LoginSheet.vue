@@ -18,7 +18,7 @@
             :class="{ 'is-on': authGate.mode === 'login' }"
             role="tab"
             :aria-selected="authGate.mode === 'login'"
-            @click="authGate.mode = 'login'"
+            @click="switchTab('login')"
           >
             ورود
           </button>
@@ -28,7 +28,7 @@
             :class="{ 'is-on': authGate.mode === 'register' }"
             role="tab"
             :aria-selected="authGate.mode === 'register'"
-            @click="authGate.mode = 'register'"
+            @click="switchTab('register')"
           >
             ثبت‌نام
           </button>
@@ -100,6 +100,11 @@ function close() {
   auth.error = ''
 }
 
+function switchTab(mode) {
+  authGate.mode = mode
+  auth.error = ''
+}
+
 // Escape closes the sheet — standard dialog behaviour, and the only keyboard
 // way out now that the scrim is the only other dismiss affordance.
 function onKeydown(e) {
@@ -123,6 +128,8 @@ watch(
 
 // Clear the error whenever the user switches between login and register tabs
 // so a failed login message never bleeds into the register form.
+// NOTE: the tab buttons also call switchTab() which clears immediately — this
+// watch is a belt-and-suspenders fallback for any programmatic mode changes.
 watch(
   () => authGate.mode,
   () => { auth.error = '' }
