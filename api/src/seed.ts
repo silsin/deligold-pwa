@@ -89,21 +89,30 @@ async function main() {
 /**
  * Initial SUPER_ADMIN login, so the platform is operable from a fresh DB.
  *
- * Constant dev defaults (override via env for production):
+ * Both values come from the environment (the server's .env in production);
+ * there is deliberately no password default in the code:
  *
  *   SEED_ADMIN_PHONE=09120000000 SEED_ADMIN_PASSWORD=ChangeMe123! npx ts-node src/seed.ts
  *
  * Upserted by phone: re-running with the same phone keeps the existing role
- * but refreshes the password (handy for lockout recovery).
+ * but refreshes the password (handy for lockout recovery). With no password
+ * set this step is skipped — never thrown — because the container runs the
+ * seed before starting the API, and a throw here would crash-loop it.
  */
-const SEED_ADMIN_PHONE = (process.env.SEED_ADMIN_PHONE ?? '09334880627').trim();
-const SEED_ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD ?? 'gfx234789';
+// `||`, not `??`: compose passes an unset variable through as an empty string.
+const SEED_ADMIN_PHONE = (process.env.SEED_ADMIN_PHONE || '09334880627').trim();
+const SEED_ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD || '';
 
 async function seedSuperAdmin(): Promise<void> {
   const phone = SEED_ADMIN_PHONE;
   const password = SEED_ADMIN_PASSWORD;
+  if (!password) {
+    console.warn('seed super-admin: SEED_ADMIN_PASSWORD not set — skipped (existing accounts unchanged)');
+    return;
+  }
   if (password.length < 6) {
-    throw new Error('SEED_ADMIN_PASSWORD must be at least 6 characters');
+    console.warn('seed super-admin: SEED_ADMIN_PASSWORD must be at least 6 characters — skipped');
+    return;
   }
 
   const hash = await bcrypt.hash(password, 10);

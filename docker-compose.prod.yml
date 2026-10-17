@@ -1,7 +1,7 @@
 ###############################################################################
 # delly — production compose for trade.ziva-vpn.online
 #
-#   cp .env.example .env        # fill in JWT_SECRET, MARKET_UID, MARKET_TOKEN
+#   cp .env.example .env        # fill in JWT_SECRET, SEED_ADMIN_*, MARKET_UID, MARKET_TOKEN
 #   docker compose -f docker-compose.prod.yml up --build -d
 #
 # Two containers:
@@ -56,6 +56,10 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
       MARKET_UID: ${MARKET_UID:-}
       MARKET_TOKEN: ${MARKET_TOKEN:-}
+      # Super-admin login, (re)set by the seed on every container start. Leave
+      # SEED_ADMIN_PASSWORD blank to skip the seed and keep the current password.
+      SEED_ADMIN_PHONE: ${SEED_ADMIN_PHONE:-}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
     volumes:
       - delly_data:/data
     networks:

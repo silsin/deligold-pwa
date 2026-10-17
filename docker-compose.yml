@@ -29,6 +29,10 @@ services:
       # the board serves hard-coded indicative prices and flags every quote stale.
       MARKET_UID: ${MARKET_UID:-}
       MARKET_TOKEN: ${MARKET_TOKEN:-}
+      # Super-admin login, (re)set by the seed on every container start. Leave
+      # SEED_ADMIN_PASSWORD blank to skip the seed and keep the current password.
+      SEED_ADMIN_PHONE: ${SEED_ADMIN_PHONE:-}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
     volumes:
       - delly_data:/data
     ports:
