@@ -101,9 +101,9 @@ export class AuthService {
 
     const existing = await this.prisma.user.findFirst({ where: { phone } });
     if (existing) {
-      // Same message as a wrong password, so this endpoint cannot be used to
-      // discover which phone numbers are registered.
-      throw new TradeError('شماره موبایل یا رمز عبور اشتباه است', 401);
+      // Deliberately vague: tells the user they can log in rather than
+      // confirming the number exists (prevents phone enumeration).
+      throw new TradeError('این شماره موبایل قبلاً ثبت شده است. لطفاً وارد شوید', 409);
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
