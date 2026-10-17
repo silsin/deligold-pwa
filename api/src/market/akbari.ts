@@ -52,26 +52,44 @@ export interface UpstreamBoard {
 /**
  * Upstream row id -> our internal symbol, in source order.
  *
- * Stored as an array of pairs rather than a Record on purpose: a Record keyed by
- * these numeric ids would be re-ordered by JS into ascending-integer order
- * (1, 4, 5, 6, 7, 8, 501) regardless of how it is written, which silently
- * decides duplicate rows by numeric value instead of by intent. An array keeps
- * the source order the developer actually typed.
+ * Verified against live upstream data (2026-10):
+ *   id 501 — طلا مفرقه سالم  (ayar 750 = 18k)  → GOLD18
+ *   id 1   — نقد شنبه        (18k settlement)   → GOLD18 fallback
+ *   id 7   — نقد یکشنبه      (18k settlement)   → MAZANEH
+ *   id 4   — نیم سکه                             → COIN_HALF
+ *   id 8   — تمام قدیم       (isActive=0 live)  → COIN_OLD  (shown when active)
+ *   id 5/6 — ربع سکه         (isActive=0 live)  → COIN_QUARTER (shown when active)
+ *
+ * Stored as an array so source order, not numeric key order, decides which id
+ * wins when multiple ids map to the same symbol.
  */
 const ID_TO_SYMBOL: Array<[number, string]> = [
-  [501, 'GOLD18'], // طلا مفرقه سالم (عیار ۷۵۰)
-  [1, 'GOLD24'], // نقد شنبه
-  [7, 'MAZANEH'], // نقد یکشنبه
-  [8, 'COIN_OLD'], // تمام قدیم
-  [6, 'COIN_QUARTER'], // ربع ۴۰۳
-  [5, 'COIN_QUARTER'], // ربع سکه — second feed for the same coin
-  [4, 'COIN_HALF'], // نیم سکه
+  [501, 'GOLD18'],     // طلا مفرقه سالم (عیار ۷۵۰) — primary 18k source
+  [1,   'GOLD18'],     // نقد شنبه — fallback 18k when 501 is inactive
+  [7,   'MAZANEH'],    // نقد یکشنبه — second settlement row
+  [4,   'COIN_HALF'],  // نیم سکه
+  [8,   'COIN_OLD'],   // تمام قدیم
+  [6,   'COIN_QUARTER'], // ربع ۴۰۳
+  [5,   'COIN_QUARTER'], // ربع سکه — second feed for same coin
 ];
 
 /** Our symbol -> upstream row id. First match in source order wins. */
 export const SYMBOL_TO_UPSTREAM_ID: Record<string, number> = ID_TO_SYMBOL.reduce<Record<string, number>>(
   (acc, [id, symbol]) => {
     if (!(symbol in acc)) acc[symbol] = id;
+    return acc;
+  },
+  {},
+);
+
+/**
+ * All upstream ids for a symbol, in priority order (first = highest priority).
+ * Used so a fallback id can serve the symbol when the primary row is inactive.
+ */
+export const SYMBOL_TO_ALL_IDS: Record<string, number[]> = ID_TO_SYMBOL.reduce<Record<string, number[]>>(
+  (acc, [id, symbol]) => {
+    if (!acc[symbol]) acc[symbol] = [];
+    acc[symbol].push(id);
     return acc;
   },
   {},
@@ -149,10 +167,11 @@ export async function fetchAkbariBoard(cfg: AkbariConfig, timeoutMs = 8_000): Pr
     if (row && typeof row.id === 'number') rows.set(row.id, row);
   }
 
-  // Trust the upstream's own clock, so a cached reading still shows when the
-  // price was actually set rather than when we happened to receive it.
+  // The upstream timestamps are in Tehran local time (UTC+3:30), not UTC.
+  // Appending 'Z' would treat them as UTC and make prices appear 3.5 h old.
+  // We offset by +03:30 so the displayed age is honest.
   const stamps = [...rows.values()]
-    .map(r => Date.parse(`${r.lastUpdateTime.replace(' ', 'T')}Z`))
+    .map(r => Date.parse(`${r.lastUpdateTime.replace(' ', 'T')}+03:30`))
     .filter(t => Number.isFinite(t));
 
   return {

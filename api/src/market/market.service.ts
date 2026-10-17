@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TradeError } from '../common/errors';
 import { DEFAULT_TRADE_SYMBOL, TRADE_SYMBOLS, isTradeSymbol, type TradeSymbol } from './symbols';
 import {
-  SYMBOL_TO_UPSTREAM_ID,
+  SYMBOL_TO_ALL_IDS,
   akbariConfig,
   akbariConfigured,
   akbariTwoSided,
@@ -193,28 +193,25 @@ export class MarketService {
   /**
    * Builds quotes from the upstream's row map.
    *
-   * A row we cannot map, or one the shop has switched off, is simply absent —
-   * the board never invents a price for an instrument it was not given.
+   * For each symbol, tries every upstream id in priority order and uses the
+   * first active one. This lets a fallback id (e.g. id 1 for GOLD18) take over
+   * automatically when the primary row (id 501) is inactive — no manual change.
    */
   private mapUpstream(upstream: UpstreamBoard): Record<string, Quote> {
     const quotes: Record<string, Quote> = {};
 
     for (const { symbol } of TRADE_SYMBOLS) {
-      const id = SYMBOL_TO_UPSTREAM_ID[symbol];
-      if (id === undefined) continue;
+      const ids = SYMBOL_TO_ALL_IDS[symbol];
+      if (!ids?.length) continue;
 
-      const row = upstream.rows.get(id);
-      if (!row) continue;
-
-      const twoSided = akbariTwoSided(row);
-      if (!twoSided) continue;
-
-      quotes[symbol] = {
-        symbol,
-        price: twoSided.price,
-        buy: twoSided.buy,
-        sell: twoSided.sell,
-      };
+      for (const id of ids) {
+        const row = upstream.rows.get(id);
+        if (!row) continue;
+        const twoSided = akbariTwoSided(row);
+        if (!twoSided) continue; // inactive or invalid — try next id
+        quotes[symbol] = { symbol, price: twoSided.price, buy: twoSided.buy, sell: twoSided.sell };
+        break; // first active id wins
+      }
     }
 
     return quotes;
