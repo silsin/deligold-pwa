@@ -59,7 +59,9 @@ function convertTgju(rateKey: string, raw: number): number {
 async function fetchOne(slug: string): Promise<number> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const res = await fetch(BASE_URL + slug, {
+      // length=1 returns only the latest row; without it TGJU sends the whole
+      // history since 2013 (~600 KB per indicator).
+      const res = await fetch(`${BASE_URL}${slug}?length=1`, {
         signal: AbortSignal.timeout(INDICATOR_TIMEOUT_MS),
         headers: { 'User-Agent': BROWSER_UA, Accept: 'application/json' },
       });
