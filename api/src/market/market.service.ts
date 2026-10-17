@@ -81,9 +81,6 @@ const STALE_HOLD_MS = 3 * 60_000;
 /** Background warm-up tick. Keeps the cache fresh even with no clients polling. */
 const POLL_INTERVAL_MS = 5 * 60_000;
 
-/** 24k is 18k scaled by karat, used when a source omits the 24k rate. */
-const GOLD24_FROM_18 = 24 / 18;
-
 type MarketSourceChoice = 'auto' | 'estjt' | 'tgju' | 'akbari';
 
 /** Which upstream source(s) to consult, from MARKET_SOURCE (default "auto"). */
@@ -99,8 +96,6 @@ function marketSourceChoice(env: NodeJS.ProcessEnv = process.env): MarketSourceC
  */
 const FALLBACK_PRICES: Record<string, number> = {
   GOLD18: 6_000_000,
-  GOLD24: 8_000_000,
-  MAZANEH: 34_500_000,
   COIN_NEW: 75_000_000,
   COIN_OLD: 72_000_000,
   COIN_HALF: 42_000_000,
@@ -288,14 +283,6 @@ export class MarketService implements OnModuleInit, OnModuleDestroy {
       } catch (err) {
         this.logger.warn(`akbari fetch failed: ${String(err)}`);
       }
-    }
-
-    // Derive 24k from 18k when no source carried it directly.
-    if (!quotes.GOLD24 && quotes.GOLD18) {
-      const price = Math.round(quotes.GOLD18.price * GOLD24_FROM_18);
-      const { buy, sell } = synthesizeSpread(price);
-      quotes.GOLD24 = { symbol: 'GOLD24', price, buy, sell };
-      freshSymbols.add('GOLD24');
     }
 
     // 4. Last fresh snapshot — an old real price beats a canned one.

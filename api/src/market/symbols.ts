@@ -22,8 +22,6 @@ export interface TradeSymbol {
 
 export const TRADE_SYMBOLS: TradeSymbol[] = [
   { symbol: 'GOLD18', name: 'طلای ۱۸ عیار', short: '۱۸ عیار', unit: 'گرم', kind: 'gold', divisible: true },
-  { symbol: 'GOLD24', name: 'طلای ۲۴ عیار', short: '۲۴ عیار', unit: 'گرم', kind: 'gold', divisible: true },
-  { symbol: 'MAZANEH', name: 'مظنه تهران', short: 'مظنه', unit: 'مثقال', kind: 'gold', divisible: true },
   { symbol: 'COIN_NEW', name: 'سکه امامی (طرح جدید)', short: 'سکه جدید', unit: 'عدد', kind: 'coin', divisible: false },
   { symbol: 'COIN_OLD', name: 'سکه بهار آزادی (طرح قدیم)', short: 'سکه قدیم', unit: 'عدد', kind: 'coin', divisible: false },
   { symbol: 'COIN_HALF', name: 'نیم سکه', short: 'نیم سکه', unit: 'عدد', kind: 'coin', divisible: false },

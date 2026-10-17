@@ -26,8 +26,6 @@ export const DEFAULT_SPREAD_PERCENT = 0.5;
  */
 export const RATE_KEY_TO_SYMBOL: Record<string, string> = {
   gold18k: 'GOLD18',
-  gold24k: 'GOLD24',
-  mazanehTehran: 'MAZANEH',
   coinOld: 'COIN_OLD',
   coinNew: 'COIN_NEW',
   coinHalf: 'COIN_HALF',
