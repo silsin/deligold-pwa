@@ -34,7 +34,7 @@
             <input v-model.number="form.maxUses" class="field__input" type="number" min="1" inputmode="numeric" placeholder="نامحدود" />
           </label>
           <label v-if="auth.isSuperAdmin" class="field field--wide">
-            <span>شناسه کارگزاری</span>
+            <span>شناسه کارگزاری (فقط اگر چند کارگزاری دارید)</span>
             <input v-model.trim="form.brokerId" class="field__input" type="text" dir="ltr" placeholder="brokerId" />
           </label>
         </div>

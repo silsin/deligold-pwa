@@ -61,17 +61,25 @@ export class InvitesService {
     // Resolve the target broker
     let targetBrokerId: string;
     if (actor.role === Role.SUPER_ADMIN) {
-      if (!dto.brokerId) {
-        throw new TradeError('سازمان مشخص نیست', 400);
+      if (dto.brokerId) {
+        // Verify broker exists
+        const broker = await this.prisma.broker.findUnique({
+          where: { id: dto.brokerId },
+        });
+        if (!broker) {
+          throw new TradeError('سازمان مشخص نیست', 400);
+        }
+        targetBrokerId = dto.brokerId;
+      } else {
+        // A super admin has no broker of their own. With a single broker the
+        // choice is unambiguous, so default to it rather than demanding an id
+        // the PWA has no screen to look up.
+        const brokers = await this.prisma.broker.findMany({ select: { id: true }, take: 2 });
+        if (brokers.length !== 1) {
+          throw new TradeError('شناسه کارگزاری را وارد کنید', 400);
+        }
+        targetBrokerId = brokers[0].id;
       }
-      // Verify broker exists
-      const broker = await this.prisma.broker.findUnique({
-        where: { id: dto.brokerId },
-      });
-      if (!broker) {
-        throw new TradeError('سازمان مشخص نیست', 400);
-      }
-      targetBrokerId = dto.brokerId;
     } else {
       if (!actor.brokerId) {
         throw new TradeError('سازمان شما مشخص نیست', 400);
