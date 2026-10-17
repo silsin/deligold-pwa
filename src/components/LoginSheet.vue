@@ -121,6 +121,13 @@ watch(
   }
 )
 
+// Clear the error whenever the user switches between login and register tabs
+// so a failed login message never bleeds into the register form.
+watch(
+  () => authGate.mode,
+  () => { auth.error = '' }
+)
+
 onBeforeUnmount(() => {
   if (typeof window !== 'undefined') window.removeEventListener('keydown', onKeydown)
 })

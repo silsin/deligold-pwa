@@ -94,11 +94,11 @@
           </div>
         </template>
       </div>
-      <div class="board__more">
+      <!-- <div class="board__more">
         <button type="button" class="board__more-btn" @click="showAll = !showAll">
           {{ showAll ? 'نمایش کمتر' : 'نمایش همه نمادها' }}
         </button>
-      </div>
+      </div> -->
       <p v-if="auth.isLoggedIn" class="board__note">
         برای ثبت سریع، روی قیمت خرید یا فروش بزنید · عدد کوچک: قیمت پایه بازار
       </p>
