@@ -1,10 +1,12 @@
 <template>
   <div class="app">
     <header class="topbar">
-      <button type="button" class="topbar__menu" aria-label="منو" @click="drawerOpen = true">
-  <i class="material-icons">menu</i>
-</button>
-      <span class="topbar__logo">دلی گلد</span>
+      <div class="topbar__start">
+        <button type="button" class="topbar__menu" aria-label="منو" @click="drawerOpen = true">
+          <i class="material-icons">menu</i>
+        </button>
+        <span class="topbar__logo">دلی گلد</span>
+      </div>
       <div class="topbar__meta">
         <span class="topbar__clock">{{ clock }}</span>
         <RouterLink v-if="auth.isLoggedIn" to="/account" class="topbar__wallet">
@@ -195,6 +197,12 @@ button {
   padding-top: calc(12px + env(safe-area-inset-top));
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
+}
+
+.topbar__start {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .topbar__menu {
