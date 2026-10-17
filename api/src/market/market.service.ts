@@ -229,8 +229,27 @@ export class MarketService implements OnModuleInit, OnModuleDestroy {
 
     const missing = () => TRADE_SYMBOLS.some(s => !quotes[s.symbol]);
 
-    // 1. ESTJT — the official union, trusted first.
-    if (choice === 'estjt' || choice === 'auto') {
+    // 1. TGJU — fast JSON API, reachable from this server, primary source.
+    if (choice === 'tgju' || choice === 'auto') {
+      try {
+        const board = await fetchTgjuBoard();
+        const memoKeys = new Set(board.staleRates);
+        for (const [rateKey, price] of board.rates) {
+          const symbol = RATE_KEY_TO_SYMBOL[rateKey];
+          if (!symbol || quotes[symbol]) continue;
+          if (!setFromRate(symbol, price)) continue;
+          if (!primarySource) primarySource = 'tgju';
+          updatedAt = board.updatedAt;
+          if (memoKeys.has(rateKey)) staleRateKeys.push(symbol);
+          else freshSymbols.add(symbol);
+        }
+      } catch (err) {
+        this.logger.warn(`tgju fetch failed: ${String(err)}`);
+      }
+    }
+
+    // 2. ESTJT — official union, try as gap-fill (may be blocked from some IPs).
+    if (missing() && (choice === 'estjt' || choice === 'auto')) {
       try {
         const board = await fetchEstjtBoard();
         for (const [rateKey, price] of board.rates) {
@@ -243,25 +262,6 @@ export class MarketService implements OnModuleInit, OnModuleDestroy {
         }
       } catch (err) {
         this.logger.warn(`estjt fetch failed: ${String(err)}`);
-      }
-    }
-
-    // 2. TGJU — gap-fill the rates ESTJT missed (auto), or the whole board (tgju).
-    if (missing() && (choice === 'tgju' || choice === 'auto')) {
-      try {
-        const board = await fetchTgjuBoard();
-        const memoKeys = new Set(board.staleRates);
-        for (const [rateKey, price] of board.rates) {
-          const symbol = RATE_KEY_TO_SYMBOL[rateKey];
-          if (!symbol || quotes[symbol]) continue;
-          if (!setFromRate(symbol, price)) continue;
-          if (!primarySource) primarySource = 'tgju';
-          updatedAt = board.updatedAt;
-          if (memoKeys.has(rateKey)) staleRateKeys.push(symbol); // memo'd — old value
-          else freshSymbols.add(symbol);
-        }
-      } catch (err) {
-        this.logger.warn(`tgju fetch failed: ${String(err)}`);
       }
     }
 

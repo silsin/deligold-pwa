@@ -23,8 +23,8 @@ import {
 
 const BOARD_URL = 'https://www.estjt.ir/tv/';
 const PRICE_URL = 'https://www.estjt.ir/price/';
-const BOARD_TIMEOUT_MS = 30_000;
-const PRICE_TIMEOUT_MS = 20_000;
+const BOARD_TIMEOUT_MS = 8_000;
+const PRICE_TIMEOUT_MS = 6_000;
 const RETRY_GAP_MS = 400;
 
 const BROWSER_UA =
