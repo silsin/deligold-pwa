@@ -4,9 +4,7 @@
       <button type="button" class="topbar__menu" aria-label="منو" @click="drawerOpen = true">
   <i class="material-icons">menu</i>
 </button>
-      <div class="topbar__brand">
-        <span class="topbar__logo">دلی گلد</span>
-      </div>
+      <span class="topbar__logo">دلی گلد</span>
       <div class="topbar__meta">
         <span class="topbar__clock">{{ clock }}</span>
         <RouterLink v-if="auth.isLoggedIn" to="/account" class="topbar__wallet">
@@ -212,23 +210,10 @@ button {
   color: var(--text);
 }
 
-.topbar__brand {
-  flex: 1;
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 8px;
-}
-
 .topbar__logo {
   font-size: 17px;
   font-weight: 900;
   color: var(--accent);
-}
-
-.topbar__sub {
-  font-size: 11px;
-  color: var(--text-muted);
 }
 
 .topbar__meta {
