@@ -180,8 +180,14 @@ export class UsersService {
 
     // Staff accounts belong to the operator's own broker, so a BROKER_ADMIN
     // cannot create a manager who outlives their own organisation. A SUPER_ADMIN
-    // creates platform-level accounts with no broker attached.
-    const brokerId = actor.role === Role.SUPER_ADMIN ? null : actor.brokerId;
+    // has no broker of their own; the user they create joins the platform's
+    // only broker when there is exactly one (see soleBrokerId).
+    const brokerId =
+      actor.role !== Role.SUPER_ADMIN
+        ? actor.brokerId
+        : requested === Role.SUPER_ADMIN
+          ? null
+          : await this.soleBrokerId();
 
     const user = await this.prisma.user.create({
       data: {
@@ -236,7 +242,18 @@ export class UsersService {
           reason: dto.note?.trim() || null,
         },
       }),
-      this.prisma.user.update({ where: { id: targetId }, data: { role: dto.role } }),
+      this.prisma.user.update({
+        where: { id: targetId },
+        data: {
+          role: dto.role,
+          // A user promoted to broker staff without a broker (a self-registered
+          // customer, say) could never be scoped — every broker-bound action,
+          // invites included, would fail. Attach the sole broker when unambiguous.
+          ...(dto.role !== Role.SUPER_ADMIN && dto.role !== Role.CUSTOMER && !target.brokerId
+            ? { brokerId: await this.soleBrokerId() }
+            : {}),
+        },
+      }),
     ]);
 
     return toPublicUser(updated);
@@ -262,6 +279,18 @@ export class UsersService {
 
     const updated = await this.prisma.user.update({ where: { id: targetId }, data: { status } });
     return toPublicUser(updated);
+  }
+
+  /**
+   * The platform's broker id when exactly one broker exists, else null.
+   *
+   * Lets a SUPER_ADMIN (who has no broker) mint broker staff on a single-broker
+   * install without an id to pick; with several brokers it stays null rather
+   * than guessing.
+   */
+  private async soleBrokerId(): Promise<string | null> {
+    const brokers = await this.prisma.broker.findMany({ select: { id: true }, take: 2 });
+    return brokers.length === 1 ? brokers[0].id : null;
   }
 
   /**

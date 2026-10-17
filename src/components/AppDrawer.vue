@@ -56,6 +56,11 @@
             </button>
           </template>
 
+          <!-- Customers and guests join a broker by scanning its invite QR. -->
+          <button v-if="!auth.isStaff" type="button" class="drawer__item" @click="go('/join')">
+            <i class="material-icons">qr_code_scanner</i> پیوستن به کارگزاری
+          </button>
+
           <button type="button" class="drawer__item" @click="go('/settings')">
             <i class="material-icons">settings</i> تنظیمات
           </button>

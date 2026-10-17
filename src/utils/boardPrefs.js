@@ -1,9 +1,9 @@
 /**
  * Home board preferences — customer only.
  *
- * Default: a single featured symbol (2 buttons: buy + sell).
- * The customer can enable more symbols from Settings; the board then
- * shows one row (buy+sell) per enabled symbol.
+ * Default: every symbol is enabled — one row (buy+sell) per symbol.
+ * The customer can switch symbols off from Settings; the board then shows
+ * only the enabled ones (the featured symbol if they switch everything off).
  */
 
 const FEATURED_KEY = 'dg_board_featured'
@@ -26,7 +26,8 @@ export function saveFeatured(symbol) {
 }
 
 /**
- * Null = default (featured only). Array = explicit enabled symbols.
+ * Null = default (all symbols). Array = explicit enabled symbols; an empty
+ * array means the customer switched everything off (featured only).
  */
 export function loadVisible() {
   try {

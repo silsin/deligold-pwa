@@ -45,7 +45,7 @@
     </section>
 
     <section class="block">
-      <p class="hint">به‌صورت پیش‌فرض فقط خرید/فروش نماد منتخب (۲ دکمه) نمایش داده می‌شود. نمادهای بیشتر را از اینجا فعال کنید.</p>
+      <p class="hint">به‌صورت پیش‌فرض خرید/فروش همه نمادها نمایش داده می‌شود. نمادهایی را که نمی‌خواهید از اینجا خاموش کنید.</p>
       <div class="modes">
         <button
           v-for="s in market.symbols"
@@ -66,7 +66,7 @@
         </label>
       </div>
       <button type="button" class="btn btn--ghost btn--block" @click="resetBoardPrefs">
-        بازگشت به پیش‌فرض (فقط نماد منتخب)
+        بازگشت به پیش‌فرض (همه نمادها)
       </button>
     </section>
 
@@ -86,7 +86,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { THEME_PALETTES, applyPalette, loadPaletteId, savePaletteId } from '../theme'
 import { useMarketStore } from '../stores/market'
 import { useAuthStore } from '../stores/auth'
@@ -121,7 +121,14 @@ const mode = ref(localStorage.getItem('dg_trade_chart_mode') || 'candle')
 const showTicker = ref(loadTickerPref())
 
 const featured = ref(loadFeatured())
-const visibleSet = ref(loadVisible() ?? [])
+// No saved choice means every symbol is on, so the switches start all-on.
+const visibleSet = ref(loadVisible() ?? market.symbols.map(s => s.symbol))
+watch(
+  () => market.symbols.length,
+  () => {
+    if (loadVisible() === null) visibleSet.value = market.symbols.map(s => s.symbol)
+  }
+)
 
 function notifyBoard() {
   try {
@@ -134,8 +141,9 @@ function notifyBoard() {
 function setFeatured(symbol) {
   featured.value = symbol
   saveFeatured(symbol)
-  // Featured symbol is always visible, even in default (featured-only) mode.
-  if (visibleSet.value.length && !visibleSet.value.includes(symbol)) {
+  // Featured symbol is always visible. In the default (all-on) state there is
+  // nothing to save; it is already shown.
+  if (loadVisible() !== null && !visibleSet.value.includes(symbol)) {
     visibleSet.value = [...visibleSet.value, symbol]
     saveVisible(visibleSet.value)
   }
@@ -143,12 +151,14 @@ function setFeatured(symbol) {
 }
 
 function saveVisibleSet() {
-  saveVisible(visibleSet.value.length ? [...visibleSet.value] : null)
+  // An explicit list — empty included (= featured only). Null is reserved for
+  // the all-on default, restored by resetBoardPrefs.
+  saveVisible([...visibleSet.value])
   notifyBoard()
 }
 
 function resetBoardPrefs() {
-  visibleSet.value = []
+  visibleSet.value = market.symbols.map(s => s.symbol)
   saveVisible(null)
   notifyBoard()
 }

@@ -3,7 +3,7 @@ import { Role } from '@prisma/client';
 import { AuthService } from './auth.service';
 import { CurrentUser, type AuthUser } from './current-user.decorator';
 import { Public } from './public.decorator';
-import { LoginDto, RefreshDto, RegisterDto } from './dto/auth.dto';
+import { JoinInviteDto, LoginDto, RefreshDto, RegisterDto } from './dto/auth.dto';
 
 /**
  * Authentication endpoints.
@@ -51,6 +51,15 @@ export class AuthController {
   async logout(@Body() dto: RefreshDto) {
     await this.auth.logout(dto.refreshToken);
     return { ok: true };
+  }
+
+  /**
+   * A signed-in customer joins a broker with an invite code (scanned QR or
+   * typed). Returns a fresh token pair, since the broker is carried in the JWT.
+   */
+  @Post('join-invite')
+  joinInvite(@CurrentUser() user: AuthUser, @Body() dto: JoinInviteDto) {
+    return this.auth.joinBroker(user, dto.code);
   }
 
   /** The signed-in user's own profile, including their verification badge. */

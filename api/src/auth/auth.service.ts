@@ -6,6 +6,7 @@ import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { TradeError } from '../common/errors';
 import { assignableRoles } from './roles';
+import type { AuthUser } from './current-user.decorator';
 import { PHONE_RE, type LoginDto, type RegisterDto } from './dto/auth.dto';
 
 /** Refresh tokens live a week, so a device stays signed in across restarts. */
@@ -113,27 +114,7 @@ export class AuthService {
     let redeemedInviteId: string | null = null;
 
     if (!actor && dto.inviteCode) {
-      const invite = await this.prisma.invite.findUnique({
-        where: { code: dto.inviteCode.trim().toUpperCase() },
-      });
-
-      if (!invite) {
-        throw new TradeError('کد دعوت یافت نشد', 404);
-      }
-
-      if (!invite.active) {
-        throw new TradeError('این کد دعوت غیرفعال است', 400);
-      }
-
-      const now = new Date();
-      if (invite.expiresAt && invite.expiresAt < now) {
-        throw new TradeError('کد دعوت منقضی شده است', 400);
-      }
-
-      if (invite.maxUses != null && invite.uses >= invite.maxUses) {
-        throw new TradeError('ظرفیت این کد دعوت تکمیل شده است', 400);
-      }
-
+      const invite = await this.usableInvite(dto.inviteCode);
       brokerId = invite.brokerId;
       redeemedInviteId = invite.id;
     }
@@ -179,6 +160,71 @@ export class AuthService {
 
     this.logger.log(`registered ${requested} ${user.id} (${phone})`);
     return this.issue(user);
+  }
+
+  /**
+   * An existing customer joins a broker by invite code — the in-app QR scan
+   * or typed code, for someone who registered without an invite.
+   *
+   * Only an unattached CUSTOMER may join: moving a customer between brokers
+   * would carry their wallet and positions across organisations, so that stays
+   * a staff decision. The broker lives in the JWT, so a fresh token pair is
+   * issued and the very next request is already broker-scoped.
+   */
+  async joinBroker(actor: AuthUser, code: string): Promise<AuthResult> {
+    const user = await this.prisma.user.findUnique({ where: { id: actor.userId } });
+    if (!user) throw new TradeError('کاربر یافت نشد', 404);
+    if (user.role !== Role.CUSTOMER) {
+      throw new TradeError('فقط مشتریان می‌توانند با کد دعوت عضو کارگزاری شوند', 403);
+    }
+
+    const invite = await this.usableInvite(code);
+    if (user.brokerId) {
+      throw new TradeError(
+        user.brokerId === invite.brokerId
+          ? 'شما هم‌اکنون عضو این کارگزاری هستید'
+          : 'شما عضو کارگزاری دیگری هستید؛ برای تغییر با پشتیبانی تماس بگیرید',
+        409,
+      );
+    }
+
+    const joined = await this.prisma.$transaction(async tx => {
+      // Conditional on still being unattached, so two scans racing each other
+      // cannot both succeed.
+      const { count } = await tx.user.updateMany({
+        where: { id: user.id, brokerId: null },
+        data: { brokerId: invite.brokerId, redeemedInviteId: invite.id },
+      });
+      if (count !== 1) throw new TradeError('شما عضو کارگزاری دیگری هستید', 409);
+
+      const updated = await tx.invite.update({
+        where: { id: invite.id },
+        data: { uses: { increment: 1 } },
+      });
+      if (updated.maxUses != null && updated.uses > updated.maxUses) {
+        throw new TradeError('ظرفیت این کد دعوت تکمیل شده است', 400);
+      }
+      return tx.user.findUniqueOrThrow({ where: { id: user.id } });
+    });
+
+    this.logger.log(`customer ${user.id} joined broker ${invite.brokerId} via invite ${invite.code}`);
+    return this.issue(joined);
+  }
+
+  /** Loads an invite by code and rejects it, with a specific reason, unless usable now. */
+  private async usableInvite(code: string) {
+    const invite = await this.prisma.invite.findUnique({
+      where: { code: code.trim().toUpperCase() },
+    });
+    if (!invite) throw new TradeError('کد دعوت یافت نشد', 404);
+    if (!invite.active) throw new TradeError('این کد دعوت غیرفعال است', 400);
+    if (invite.expiresAt && invite.expiresAt < new Date()) {
+      throw new TradeError('کد دعوت منقضی شده است', 400);
+    }
+    if (invite.maxUses != null && invite.uses >= invite.maxUses) {
+      throw new TradeError('ظرفیت این کد دعوت تکمیل شده است', 400);
+    }
+    return invite;
   }
 
   async login(dto: LoginDto): Promise<AuthResult> {

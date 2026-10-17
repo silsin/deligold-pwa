@@ -159,6 +159,29 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  /**
+   * A signed-in customer joins a broker by invite code (scanned or typed).
+   * The broker is carried in the JWT, so the fresh token the API returns is
+   * swapped in before anything else is fetched.
+   */
+  async function joinBroker(code) {
+    loading.value = true;
+    error.value = '';
+    try {
+      const data = await api.post('/auth/join-invite', { code });
+      token.value = data.accessToken;
+      setToken(data.accessToken);
+      if (data.user) user.value = data.user;
+      await Promise.all([fetchProfile(), fetchWalletBundle()]);
+      return true;
+    } catch (e) {
+      error.value = e.message || 'پیوستن به کارگزاری ناموفق بود';
+      return false;
+    } finally {
+      loading.value = false;
+    }
+  }
+
   async function login(identifier, password) {
     loading.value = true;
     error.value = '';
@@ -703,6 +726,7 @@ export const useAuthStore = defineStore('auth', () => {
     positionOf,
     register,
     login,
+    joinBroker,
     fetchAccount,
     fetchProfile,
     ensureSession,

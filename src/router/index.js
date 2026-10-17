@@ -18,6 +18,7 @@ import ForbiddenView from '../views/ForbiddenView.vue'
 import { STAFF_ROLES, ADMIN_ROLES, ROLES } from '../utils/roles'
 
 const CustomersView = () => import('../views/CustomersView.vue')
+const JoinView = () => import('../views/JoinView.vue')
 
 /**
  * Live gold/silver trading app. Home is the price board (خرید/فروش quotes),
@@ -50,6 +51,8 @@ const routes = [
   // Cash wallet: deposits, withdrawals and gold-to-gold conversion.
   { path: '/wallet', name: 'wallet', component: WalletView, meta: { title: 'کیف پول', requiresAuth: true } },
   { path: '/settings', name: 'settings', component: SettingsView, meta: { title: 'تنظیمات' } },
+  // Join a broker by scanning its invite QR or typing the code — guests too.
+  { path: '/join', name: 'join', component: JoinView, meta: { title: 'پیوستن به کارگزاری' } },
   // Staff review queue — every staff role.
   { path: '/review', name: 'review', component: ReviewQueueView, meta: { title: 'صف بررسی', requiresAuth: true, roles: STAFF_ROLES } },
   // Broker-manager desk: customers + cash approvals — every staff role.

@@ -286,7 +286,9 @@ const visibleRows = computed(() => {
   if (showAll.value) return allSymbols
   
   const visible = loadVisible()
-  if (visible && visible.length) {
+  // No saved choice → every price card is enabled.
+  if (visible === null) return allSymbols
+  if (visible.length) {
     const set = new Set(visible)
     const rows = allSymbols.filter(s => set.has(s.symbol))
     if (rows.length) return rows

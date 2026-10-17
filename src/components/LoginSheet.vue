@@ -68,6 +68,15 @@
             </label>
           </template>
 
+          <button
+            v-if="authGate.mode === 'register' && !authGate.pendingInvite"
+            type="button"
+            class="sheet__scan"
+            @click="scanInvite"
+          >
+            <span class="material-icons">qr_code_scanner</span> کد دعوت کارگزاری دارید؟ اسکن کنید
+          </button>
+
           <p v-if="auth.error" class="sheet__error" role="alert">{{ auth.error }}</p>
 
           <button type="submit" class="sheet__submit" :disabled="auth.loading">
@@ -150,6 +159,13 @@ watch(
 onBeforeUnmount(() => {
   if (typeof window !== 'undefined') window.removeEventListener('keydown', onKeydown)
 })
+
+// Hand off to the scanner screen; it brings the guest back here with the invite.
+function scanInvite() {
+  closeLogin()
+  auth.error = ''
+  router.push('/join')
+}
 
 async function submit() {
   const ok =
@@ -318,6 +334,26 @@ async function submit() {
 
 .sheet__invite.is-bad .material-icons {
   color: var(--down);
+}
+
+.sheet__scan {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  border: 1px dashed var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.sheet__scan .material-icons {
+  font-size: 19px;
 }
 
 .sheet__error {

@@ -73,6 +73,13 @@ export class LoginDto {
   password!: string;
 }
 
+/** Body of `POST /auth/join-invite` — an existing customer joining a broker. */
+export class JoinInviteDto {
+  @IsString()
+  @Matches(/^[A-Z2-9]{4,16}$/i, { message: 'کد دعوت نامعتبر است' })
+  code!: string;
+}
+
 export class RefreshDto {
   @IsString()
   @IsNotEmpty({ message: 'توکن تمدید الزامی است' })
