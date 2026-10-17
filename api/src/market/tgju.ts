@@ -7,17 +7,16 @@
  * The first column of the latest row is the current price, in Rial for gold and
  * coins and in USD for the ounce.
  *
- * The 8 indicators are fetched in parallel batches of 3 with a short pause
+ * The 7 indicators are fetched in parallel batches of 3 with a short pause
  * between batches to stay friendly to the rate limiter. Each indicator is tried
- * twice (one retry) under a 2.5 s budget. A failed indicator is filled from a
+ * twice (one retry) under a 6 s budget (the API often takes 2–3 s). A failed indicator is filled from a
  * durable in-memory memo so the board is never missing a rate during an outage
  * — those memo'd rates are reported as stale so the UI can say so.
  *
- * Rial → Toman is ÷10. Gold is quoted per مثقال (4.608 g) and converted here to
- * per gram to match the gram-quoted gold symbols; coins stay per piece.
+ * Rial → Toman is ÷10. geram18 is already per gram and coins are per piece, so
+ * no weight conversion is needed.
  */
 import {
-  MESGHAL_TO_GRAM,
   RIAL_TO_TOMAN,
   TGJU_SLUG_TO_RATE_KEY,
   parsePrice,
@@ -25,10 +24,10 @@ import {
 } from './public-rates';
 
 const BASE_URL = 'https://api.tgju.org/v1/market/indicator/summary-table-data/';
-const SLUGS = ['geram18', 'geram24', 'ons', 'sekee', 'sekeb', 'nim', 'rob', 'gerami'];
+const SLUGS = ['geram18', 'ons', 'sekee', 'sekeb', 'nim', 'rob', 'gerami'];
 const BATCH_SIZE = 3;
 const BATCH_GAP_MS = 200;
-const INDICATOR_TIMEOUT_MS = 2_500;
+const INDICATOR_TIMEOUT_MS = 6_000;
 
 const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';
 
@@ -45,9 +44,8 @@ const tgjuMemo = new Map<string, number>();
 function convertTgju(rateKey: string, raw: number): number {
   switch (rateKey) {
     case 'gold18k':
-    case 'gold24k':
-      // Rial per مثقال → Toman per gram.
-      return Math.round(raw / RIAL_TO_TOMAN / MESGHAL_TO_GRAM);
+      // geram18 is already per gram — Rial → Toman only.
+      return Math.round(raw / RIAL_TO_TOMAN);
     case 'ounceDollar':
       // Already USD; not tradeable, so it passes through raw.
       return Math.round(raw);

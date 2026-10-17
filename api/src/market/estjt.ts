@@ -7,16 +7,14 @@
  * would be overkill. A `/price/` table is the fallback when the live board is
  * unreachable; it is the same host and reuses the `data-field` convention.
  *
- * The union's numbers are already in Toman. Gold is quoted per مثقال (4.608 g)
- * and converted here to per gram so it matches the gram-quoted gold symbols;
- * mazaneh stays per مثقال and coins stay per piece, matching their symbols.
+ * The union's numbers are already in Toman and in each symbol's display unit
+ * (gold per gram, coins per piece), so no weight conversion is applied.
  *
  * The board request is given a generous timeout because union servers are slow
  * (frequently 1.5–40 s per request); a tight cap would silently freeze prices.
  */
 import {
   ESTJT_FIELD_TO_RATE_KEY,
-  MESGHAL_TO_GRAM,
   parsePrice,
   type PublicBoard,
 } from './public-rates';
@@ -32,18 +30,16 @@ const BROWSER_UA =
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
-/** Converts a raw union value to Toman in the symbol's display unit. */
-function convertEstjt(rateKey: string, raw: number): number {
-  switch (rateKey) {
-    case 'gold18k':
-    case 'gold24k':
-      // Toman per مثقال → Toman per gram.
-      return Math.round(raw / MESGHAL_TO_GRAM);
-    default:
-      // mazaneh (per مثقال) and coins (per piece) are already in their display
-      // unit; ounceDollar is USD but not tradeable, so it passes through raw.
-      return Math.round(raw);
-  }
+/**
+ * Converts a raw union value to Toman in the symbol's display unit.
+ *
+ * Every field is already in its display unit: IRG18 is Toman per gram (e.g.
+ * 26,178,500 next to a mazaneh of 113,400,000 per مثقال), coins are per piece,
+ * and the ounce is USD. Dividing IRG18 by the مثقال weight again produced a
+ * ~4.6× too-low gold price that looked like the canned fallback.
+ */
+function convertEstjt(_rateKey: string, raw: number): number {
+  return Math.round(raw);
 }
 
 /**

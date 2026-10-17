@@ -95,12 +95,12 @@ function marketSourceChoice(env: NodeJS.ProcessEnv = process.env): MarketSourceC
  * plausible, and `stale: true` tells the UI to say so.
  */
 const FALLBACK_PRICES: Record<string, number> = {
-  GOLD18: 6_000_000,
-  COIN_NEW: 75_000_000,
-  COIN_OLD: 72_000_000,
-  COIN_HALF: 42_000_000,
-  COIN_QUARTER: 24_000_000,
-  COIN_GRAM: 13_500_000,
+  GOLD18: 26_000_000,
+  COIN_NEW: 266_000_000,
+  COIN_OLD: 258_000_000,
+  COIN_HALF: 140_000_000,
+  COIN_QUARTER: 75_000_000,
+  COIN_GRAM: 38_000_000,
 };
 
 @Injectable()

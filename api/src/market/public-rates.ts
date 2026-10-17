@@ -9,8 +9,6 @@
  * row-id model, so it stays in `akbari.ts` and is mapped separately.
  */
 
-/** مثقال (mesghal) is 4.608 g — the weight the union quotes gold per. */
-export const MESGHAL_TO_GRAM = 4.608;
 
 /** Rial → Toman is a fixed ÷10. */
 export const RIAL_TO_TOMAN = 10;
@@ -36,8 +34,6 @@ export const RATE_KEY_TO_SYMBOL: Record<string, string> = {
 /** ESTJT `data-field` attribute → canonical rate key. */
 export const ESTJT_FIELD_TO_RATE_KEY: Record<string, string> = {
   IRG18: 'gold18k',
-  IRG24: 'gold24k',
-  IRG17: 'mazanehTehran',
   GOLD: 'ounceDollar',
   IRCOLD: 'coinOld',
   IRCNEW: 'coinNew',
@@ -49,7 +45,6 @@ export const ESTJT_FIELD_TO_RATE_KEY: Record<string, string> = {
 /** TGJU indicator slug → canonical rate key. */
 export const TGJU_SLUG_TO_RATE_KEY: Record<string, string> = {
   geram18: 'gold18k',
-  geram24: 'gold24k',
   ons: 'ounceDollar',
   sekee: 'coinNew',
   sekeb: 'coinOld',
@@ -62,7 +57,7 @@ export const TGJU_SLUG_TO_RATE_KEY: Record<string, string> = {
  * Normalised board from a public (mid-only) source.
  *
  * `rates` is keyed by canonical rate key and already converted to Toman in the
- * symbol's display unit (gold per gram, mazaneh per مثقال, coins per piece).
+ * symbol's display unit (gold per gram, coins per piece).
  * `staleRates` lists keys that came from the in-memory memo rather than a fresh
  * fetch, so the caller can flag them as old.
  */
