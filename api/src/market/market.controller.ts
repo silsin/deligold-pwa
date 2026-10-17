@@ -76,6 +76,11 @@ export class MarketController {
       source: b.source,
       updatedAt: b.updatedAt,
       stale: b.stale,
+      // Optional, added for the multi-source feed so the board can explain
+      // itself ("some rates filled from backup") without changing the shape
+      // the PWA store already expects.
+      note: b.note,
+      staleRates: b.staleRates,
     };
   }
 

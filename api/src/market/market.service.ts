@@ -1,8 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { BoardPrice, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { TradeError } from '../common/errors';
-import { DEFAULT_TRADE_SYMBOL, TRADE_SYMBOLS, isTradeSymbol, type TradeSymbol } from './symbols';
+import { TRADE_SYMBOLS, isTradeSymbol } from './symbols';
 import {
   SYMBOL_TO_ALL_IDS,
   akbariConfig,
@@ -11,6 +11,9 @@ import {
   fetchAkbariBoard,
   type UpstreamBoard,
 } from './akbari';
+import { RATE_KEY_TO_SYMBOL, synthesizeSpread } from './public-rates';
+import { fetchEstjtBoard } from './estjt';
+import { fetchTgjuBoard } from './tgju';
 
 /**
  * The live price board.
@@ -39,10 +42,15 @@ export interface Quote {
 
 export interface Board {
   quotes: Record<string, Quote>;
+  /** Which source fed the board: "estjt" | "tgju" | "akbari" | "fallback". */
   source: string;
   updatedAt: number;
   /** True when the last fetch failed and we are serving a cached/fallback board. */
   stale: boolean;
+  /** Human-readable note shown on the board, e.g. "some rates filled from backup". */
+  note?: string;
+  /** Symbols not obtained fresh from a live source (filled from memo/snapshot/fallback). */
+  staleRates?: string[];
 }
 
 /**
@@ -61,10 +69,31 @@ export interface BoardPriceView {
 }
 
 /** How long a fetched board is served before the next request re-fetches it. */
-const CACHE_TTL_MS = 30_000;
+const CACHE_TTL_MS = 60_000;
 
 /**
- * Used when the upstream is unreachable and we have nothing cached yet, so the
+ * After a partially-fresh fetch, hold off re-polling for this long so a slow
+ * upstream is not hammered on every request. A total failure is NOT held — the
+ * next request should retry in case the upstream recovered.
+ */
+const STALE_HOLD_MS = 3 * 60_000;
+
+/** Background warm-up tick. Keeps the cache fresh even with no clients polling. */
+const POLL_INTERVAL_MS = 5 * 60_000;
+
+/** 24k is 18k scaled by karat, used when a source omits the 24k rate. */
+const GOLD24_FROM_18 = 24 / 18;
+
+type MarketSourceChoice = 'auto' | 'estjt' | 'tgju' | 'akbari';
+
+/** Which upstream source(s) to consult, from MARKET_SOURCE (default "auto"). */
+function marketSourceChoice(env: NodeJS.ProcessEnv = process.env): MarketSourceChoice {
+  const v = (env.MARKET_SOURCE ?? 'auto').trim().toLowerCase();
+  return v === 'estjt' || v === 'tgju' || v === 'akbari' ? v : 'auto';
+}
+
+/**
+ * Used when every upstream is unreachable and nothing is cached yet, so the
  * app still boots and the board still renders. Values are deliberately
  * plausible, and `stale: true` tells the UI to say so.
  */
@@ -79,17 +108,31 @@ const FALLBACK_PRICES: Record<string, number> = {
   COIN_GRAM: 13_500_000,
 };
 
-/** Spread applied when a source quotes a single price with no bid/ask pair. */
-const DEFAULT_SPREAD_PERCENT = 0.5;
-
 @Injectable()
-export class MarketService {
+export class MarketService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(MarketService.name);
 
   private cache: Board | null = null;
   private inflight: Promise<Board> | null = null;
+  /** Last fully-fresh board, kept so a later outage serves real prices, not the canned ones. */
+  private lastSnapshot: Board | null = null;
+  /** Until this time, serve the cached board even past TTL (partial-fetch throttle). */
+  private staleHoldUntil = 0;
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(private readonly prisma: PrismaService) {}
+
+  async onModuleInit(): Promise<void> {
+    // Warm the cache at boot so the first customer read is instant, then keep
+    // it warm on a 5-minute tick — a public union server can take 30+ s, and no
+    // customer should wait on that for a board refresh.
+    void this.board().catch(err => this.logger.warn(`initial board warm-up failed: ${String(err)}`));
+    this.pollTimer = setInterval(() => void this.board().catch(() => {}), POLL_INTERVAL_MS);
+  }
+
+  onModuleDestroy(): void {
+    if (this.pollTimer) clearInterval(this.pollTimer);
+  }
 
   /**
    * The current board, fetching a fresh one when the cache has expired.
@@ -99,12 +142,22 @@ export class MarketService {
    * a single tick would fan out into dozens of upstream requests.
    */
   async board(): Promise<Board> {
-    if (this.cache && Date.now() - this.cache.updatedAt < CACHE_TTL_MS) {
-      return this.cache;
+    if (this.cache) {
+      const age = Date.now() - this.cache.updatedAt;
+      if (age < CACHE_TTL_MS) return this.cache;
+      // Stale hold: keep serving the cached board rather than re-polling a slow
+      // upstream that just returned partial data.
+      if (Date.now() < this.staleHoldUntil) return this.cache;
     }
     if (this.inflight) return this.inflight;
 
     this.inflight = this.fetchBoard()
+      .catch((err: unknown): Board => {
+        this.logger.warn(
+          `price fetch failed, serving ${this.cache ? 'cached' : 'fallback'} board: ${String(err)}`,
+        );
+        return this.cache ?? this.fallbackBoard();
+      })
       .then(async board => {
         const merged = await this.applyOverrides(board);
         this.cache = merged;
@@ -121,7 +174,7 @@ export class MarketService {
    * Drop the cached board so the next `board()` re-reads the feed *and* the
    * manager overrides. Called whenever a broker manager saves or clears a price,
    * so a manual change is visible on the customer board immediately rather than
-   * after the 30s cache TTL.
+   * after the cache TTL.
    */
   invalidate(): void {
     this.cache = null;
@@ -151,47 +204,137 @@ export class MarketService {
   }
 
   /**
-   * Fetches the upstream board, falling back to the canned one on failure.
+   * Builds the board by walking the source fallback chain.
    *
-   * A failure is not fatal: a trading app that shows "no data" because a public
-   * site hiccupped is worse than one that shows a slightly old number with a
-   * stale badge on it.
+   * In "auto": ESTJT (the official union) → TGJU gap-fills whatever ESTJT missed
+   * → Akbari fills the rest → the last fresh snapshot → the canned fallback.
+   * An explicit choice (estjt/tgju/akbari) consults only that source, then
+   * snapshot/fallback. Each step is best-effort: a slow or dead source is
+   * skipped and the next fills the gaps, so a single outage never blanks the
+   * board.
    */
   private async fetchBoard(): Promise<Board> {
-    try {
-      const cfg = akbariConfig();
+    const choice = marketSourceChoice();
+    const quotes: Record<string, Quote> = {};
+    /** Symbols obtained from a fresh live source this cycle (not memo/snapshot/fallback). */
+    const freshSymbols = new Set<string>();
+    const staleRateKeys: string[] = [];
+    let primarySource = '';
+    let updatedAt = Date.now();
 
-      if (akbariConfigured(cfg)) {
-        const upstream = await fetchAkbariBoard(cfg);
-        const quotes = this.mapUpstream(upstream);
-        if (!Object.keys(quotes).length) throw new Error('upstream carried no tradeable symbols');
+    /** Writes a mid-only rate as a two-sided quote; first source wins. */
+    const setFromRate = (symbol: string, price: number): boolean => {
+      if (quotes[symbol]) return false;
+      if (!Number.isFinite(price) || price <= 0) return false;
+      const rounded = Math.round(price);
+      const { buy, sell } = synthesizeSpread(rounded);
+      quotes[symbol] = { symbol, price: rounded, buy, sell };
+      return true;
+    };
 
-        return {
-          quotes,
-          source: 'akbarigold',
-          // Keep the upstream's own clock so the board's age is honest.
-          updatedAt: upstream.updatedAt,
-          stale: false,
-        };
+    const missing = () => TRADE_SYMBOLS.some(s => !quotes[s.symbol]);
+
+    // 1. ESTJT — the official union, trusted first.
+    if (choice === 'estjt' || choice === 'auto') {
+      try {
+        const board = await fetchEstjtBoard();
+        for (const [rateKey, price] of board.rates) {
+          const symbol = RATE_KEY_TO_SYMBOL[rateKey];
+          if (symbol && setFromRate(symbol, price)) {
+            freshSymbols.add(symbol);
+            if (!primarySource) primarySource = 'estjt';
+            updatedAt = board.updatedAt;
+          }
+        }
+      } catch (err) {
+        this.logger.warn(`estjt fetch failed: ${String(err)}`);
       }
-
-      // No credentials: the feed cannot be read, so say so loudly rather than
-      // silently serving numbers nobody set.
-      this.logger.error(
-        'MARKET_UID / MARKET_TOKEN are not set — the board cannot fetch real prices and will ' +
-          'show indicative fallback values. Set them in the environment (see api/.env).',
-      );
-      return this.fallbackBoard();
-    } catch (err) {
-      this.logger.warn(
-        `price fetch failed, serving ${this.cache ? 'cached' : 'fallback'} board: ${String(err)}`,
-      );
-      return this.fallbackBoard();
     }
+
+    // 2. TGJU — gap-fill the rates ESTJT missed (auto), or the whole board (tgju).
+    if (missing() && (choice === 'tgju' || choice === 'auto')) {
+      try {
+        const board = await fetchTgjuBoard();
+        const memoKeys = new Set(board.staleRates);
+        for (const [rateKey, price] of board.rates) {
+          const symbol = RATE_KEY_TO_SYMBOL[rateKey];
+          if (!symbol || quotes[symbol]) continue;
+          if (!setFromRate(symbol, price)) continue;
+          if (!primarySource) primarySource = 'tgju';
+          updatedAt = board.updatedAt;
+          if (memoKeys.has(rateKey)) staleRateKeys.push(symbol); // memo'd — old value
+          else freshSymbols.add(symbol);
+        }
+      } catch (err) {
+        this.logger.warn(`tgju fetch failed: ${String(err)}`);
+      }
+    }
+
+    // 3. Akbari — internal shop system, real per-side margins.
+    if (missing() && (choice === 'akbari' || choice === 'auto')) {
+      try {
+        const cfg = akbariConfig();
+        if (akbariConfigured(cfg)) {
+          const upstream = await fetchAkbariBoard(cfg);
+          const akQuotes = this.mapUpstream(upstream);
+          for (const symbol of Object.keys(akQuotes)) {
+            if (quotes[symbol]) continue;
+            quotes[symbol] = akQuotes[symbol];
+            freshSymbols.add(symbol);
+            if (!primarySource) primarySource = 'akbari';
+            updatedAt = upstream.updatedAt;
+          }
+        }
+      } catch (err) {
+        this.logger.warn(`akbari fetch failed: ${String(err)}`);
+      }
+    }
+
+    // Derive 24k from 18k when no source carried it directly.
+    if (!quotes.GOLD24 && quotes.GOLD18) {
+      const price = Math.round(quotes.GOLD18.price * GOLD24_FROM_18);
+      const { buy, sell } = synthesizeSpread(price);
+      quotes.GOLD24 = { symbol: 'GOLD24', price, buy, sell };
+      freshSymbols.add('GOLD24');
+    }
+
+    // 4. Last fresh snapshot — an old real price beats a canned one.
+    if (missing() && this.lastSnapshot) {
+      for (const { symbol } of TRADE_SYMBOLS) {
+        if (quotes[symbol] || !this.lastSnapshot.quotes[symbol]) continue;
+        quotes[symbol] = this.lastSnapshot.quotes[symbol];
+        staleRateKeys.push(symbol);
+      }
+    }
+
+    // 5. Canned fallback — the board still renders when everything else failed.
+    this.fillFallback(quotes, staleRateKeys);
+
+    const source = primarySource || 'fallback';
+    const stale = freshSymbols.size === 0;
+
+    // Partial fresh data throttles re-polling; a total failure does not.
+    if (freshSymbols.size > 0 && freshSymbols.size < TRADE_SYMBOLS.length) {
+      this.staleHoldUntil = Date.now() + STALE_HOLD_MS;
+    }
+
+    // Keep the snapshot fresh so a later outage falls back to real prices.
+    if (freshSymbols.size > 0) {
+      this.lastSnapshot = { quotes: { ...quotes }, source, updatedAt, stale };
+    }
+
+    if (source === 'fallback' && !akbariConfigured(akbariConfig())) {
+      this.logger.error(
+        'All price sources failed and Akbari is not configured (MARKET_UID / MARKET_TOKEN). ' +
+          'The board is serving indicative fallback values.',
+      );
+    }
+
+    return { quotes, source, updatedAt, stale, note: this.buildNote(stale, staleRateKeys), staleRates: staleRateKeys };
   }
 
   /**
-   * Builds quotes from the upstream's row map.
+   * Builds quotes from the Akbari upstream's row map.
    *
    * For each symbol, tries every upstream id in priority order and uses the
    * first active one. This lets a fallback id (e.g. id 1 for GOLD18) take over
@@ -217,24 +360,45 @@ export class MarketService {
     return quotes;
   }
 
+  /** Fills any still-missing symbols with the canned indicative prices. */
+  private fillFallback(quotes: Record<string, Quote>, staleRateKeys: string[]): void {
+    for (const { symbol } of TRADE_SYMBOLS) {
+      if (quotes[symbol]) continue;
+      const price = FALLBACK_PRICES[symbol];
+      if (!price) continue;
+      const { buy, sell } = synthesizeSpread(price);
+      quotes[symbol] = { symbol, price, buy, sell };
+      staleRateKeys.push(symbol);
+    }
+  }
+
   /**
    * The canned board, used when the upstream is unreachable and nothing is
    * cached. Marked stale so the UI can say the numbers are indicative.
    */
   private fallbackBoard(): Board {
     const quotes: Record<string, Quote> = {};
-    for (const { symbol } of TRADE_SYMBOLS) {
-      const price = FALLBACK_PRICES[symbol];
-      if (!price) continue;
-      const half = (price * DEFAULT_SPREAD_PERCENT) / 100;
-      quotes[symbol] = {
-        symbol,
-        price,
-        buy: Math.round(price - half),
-        sell: Math.round(price + half),
-      };
+    const staleRateKeys: string[] = [];
+    this.fillFallback(quotes, staleRateKeys);
+    return {
+      quotes,
+      source: 'fallback',
+      updatedAt: Date.now(),
+      stale: true,
+      note: 'دریافت قیمت زنده ناموفق بود؛ قیمت‌های پشتیبان نمایش داده می‌شود.',
+      staleRates: staleRateKeys,
+    };
+  }
+
+  /** A short Persian note for the board, only when something is worth saying. */
+  private buildNote(stale: boolean, staleRateKeys: string[]): string {
+    if (stale) {
+      return 'دریافت قیمت زنده ناموفق بود؛ قیمت‌های پشتیبان نمایش داده می‌شود.';
     }
-    return { quotes, source: 'fallback', updatedAt: Date.now(), stale: true };
+    if (staleRateKeys.length > 0) {
+      return 'برخی نمادها از منبع پشتیبان تکمیل شدند.';
+    }
+    return '';
   }
 
   // ── Manual (broker-manager) overrides ──────────────────────────────────
@@ -245,7 +409,7 @@ export class MarketService {
    * Each enabled override fully replaces its symbol's quote with the manager's
    * numbers, written into the *same* `buy`/`sell`/`price` fields the feed uses —
    * so the customer board, the ticker and the order-fill price all read one value
-   * whether it came from akbarigold or was typed in at the shop. An override with
+   * whether it came from the feed or was typed in at the shop. An override with
    * no numbers at all is skipped, so an empty form can never blank a live symbol.
    */
   private async applyOverrides(board: Board): Promise<Board> {
@@ -285,7 +449,7 @@ export class MarketService {
    *
    * Broker-manager only — enforced by the controller's `@Roles`, not here. The
    * cache is cleared so the new number reaches the customer board on the next
-   * read rather than after the 30s feed TTL.
+   * read rather than after the feed TTL.
    */
   async setOverride(
     actorId: string,
@@ -345,4 +509,3 @@ export class MarketService {
     };
   }
 }
-
