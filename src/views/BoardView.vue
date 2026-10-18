@@ -85,7 +85,6 @@
             <button type="button" class="row__card row__card--sell" :class="dirClass(s.symbol)" @click="quickOrder(s.symbol, 'SELL')">
               <i v-if="market.direction[s.symbol]" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
               <span class="row__price">{{ faMoney(sellPrice(s.symbol)) }}</span>
-              <span class="row__sub">{{ faMoney(market.prices[s.symbol]) }}</span>
             </button>
           </div>
         </template>
@@ -96,10 +95,10 @@
         </button>
       </div> -->
       <p v-if="auth.isLoggedIn" class="board__note">
-        برای ثبت سریع، روی قیمت خرید یا فروش بزنید · عدد کوچک: قیمت پایه بازار
+        برای ثبت سریع، روی قیمت خرید یا فروش بزنید
       </p>
       <p v-else class="board__note">
-        قیمت خرید/فروش نرخ لحظه‌ای است · عدد کوچک: قیمت پایه بازار
+        قیمت لحظه‌ای بازار
       </p>
 
       <!-- Account balance — customers and guests only; staff work from their
