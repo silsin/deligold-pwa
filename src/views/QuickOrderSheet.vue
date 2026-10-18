@@ -10,7 +10,6 @@
 
       <div class="qo__sym">
         <b>{{ symbolName }}</b>
-        <span class="tnum">{{ priceText }}</span>
       </div>
 
       <div class="qo__row">

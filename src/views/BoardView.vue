@@ -35,57 +35,24 @@
         <span class="board__update-time">{{ faJalaliDateTime(market.updatedAt) }}</span>
       </div>
 
-      <!-- Column headers -->
-      <!-- RTL: first grid item lands rightmost, so buy (right) must precede sell. -->
-      <div class="board__head">
-        <span class="board__head-buy">می‌خرید</span>
-        <span class="board__head-name"></span>
-        <span class="board__head-sell">میفروشید</span>
-      </div>
-
-      <!-- Price rows.
-        Customer: buy/sell tiles are order actions (open the quick sheet).
-        Everyone else (guest/staff): the whole block is a read-only price tile. -->
+      <!-- Price rows -->
       <div class="board__rows">
         <template v-for="s in visibleRows" :key="s.symbol">
           <div v-if="auth.isLoggedIn && auth.isCustomer" class="row" :class="{ 'is-selected': market.symbol === s.symbol }">
-            <!-- Buy side (right in RTL layout) -->
-            <button type="button" class="row__card row__card--buy" :class="dirClass(s.symbol)" @click="quickOrder(s.symbol, 'BUY')">
-              <i v-if="market.direction[s.symbol]" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
-              <span class="row__price">{{ faMoney(buyPrice(s.symbol)) }}</span>
-            </button>
-
             <button type="button" class="row__name" @click="quickOrder(s.symbol, 'BUY')">
               <span class="row__label">{{ s.name }}</span>
             </button>
-
-            <!-- Sell side (left in RTL layout) -->
-            <button type="button" class="row__card row__card--sell" :class="dirClass(s.symbol)" @click="quickOrder(s.symbol, 'SELL')">
-              <i v-if="market.direction[s.symbol]" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
-              <span class="row__price">{{ faMoney(sellPrice(s.symbol)) }}</span>
-            </button>
-          </div>
-
-          <div
-            v-else
-            class="row"
-            :class="{ 'is-selected': market.symbol === s.symbol }"
-          >
-            <!-- Buy side (right in RTL layout) -->
             <button type="button" class="row__card row__card--buy" :class="dirClass(s.symbol)" @click="quickOrder(s.symbol, 'BUY')">
               <i v-if="market.direction[s.symbol]" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
-              <span class="row__price">{{ faMoney(buyPrice(s.symbol)) }}</span>
+              <span class="row__price">{{ faMoney(market.prices[s.symbol]) }}</span>
             </button>
-
-            <span class="row__name">
-              <span class="row__label">{{ s.name }}</span>
-            </span>
-
-            <!-- Sell side (left in RTL layout) -->
-            <button type="button" class="row__card row__card--sell" :class="dirClass(s.symbol)" @click="quickOrder(s.symbol, 'SELL')">
+          </div>
+          <div v-else class="row" :class="{ 'is-selected': market.symbol === s.symbol }">
+            <span class="row__name"><span class="row__label">{{ s.name }}</span></span>
+            <div class="row__card row__card--buy" :class="dirClass(s.symbol)">
               <i v-if="market.direction[s.symbol]" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
-              <span class="row__price">{{ faMoney(sellPrice(s.symbol)) }}</span>
-            </button>
+              <span class="row__price">{{ faMoney(market.prices[s.symbol]) }}</span>
+            </div>
           </div>
         </template>
       </div>
@@ -442,7 +409,7 @@ onBeforeUnmount(() => {
 
 .row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: 1fr auto;
   gap: 6px;
   align-items: stretch;
   padding: 0;
