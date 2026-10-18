@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "pwa-invite-test",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "set DG_API_TARGET=http://localhost:7457&& npx vite --port 9751 --strictPort"],
+      "port": 9751
+    }
+  ]
+}

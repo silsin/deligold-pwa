@@ -222,8 +222,10 @@ export class MarketService implements OnModuleInit, OnModuleDestroy {
       if (quotes[symbol]) return false;
       if (!Number.isFinite(price) || price <= 0) return false;
       const rounded = Math.round(price);
-      const { buy, sell } = synthesizeSpread(rounded);
-      quotes[symbol] = { symbol, price: rounded, buy, sell };
+      // No synthetic spread — public sources (TGJU/ESTJT) only carry a mid price.
+      // The client applies its own fee model on top; a double spread would show
+      // three visibly different numbers on the board tile.
+      quotes[symbol] = { symbol, price: rounded, buy: null, sell: null };
       return true;
     };
 
@@ -353,16 +355,11 @@ export class MarketService implements OnModuleInit, OnModuleDestroy {
       if (quotes[symbol]) continue;
       const price = FALLBACK_PRICES[symbol];
       if (!price) continue;
-      const { buy, sell } = synthesizeSpread(price);
-      quotes[symbol] = { symbol, price, buy, sell };
+      quotes[symbol] = { symbol, price, buy: null, sell: null };
       staleRateKeys.push(symbol);
     }
   }
 
-  /**
-   * The canned board, used when the upstream is unreachable and nothing is
-   * cached. Marked stale so the UI can say the numbers are indicative.
-   */
   private fallbackBoard(): Board {
     const quotes: Record<string, Quote> = {};
     const staleRateKeys: string[] = [];

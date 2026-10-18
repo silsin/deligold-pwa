@@ -2,12 +2,6 @@ import axios from 'axios'
 
 /**
  * API base for the NestJS delly-api.
- *
- * Production: the PWA is a different origin, so `VITE_API_URL` must point at the
- * NestJS API (and the API must list this origin in its CORS origins).
- * Development: Vite proxies `/auth /users /trade /wallet /market /reports
- * /stores /uploads` to the local delly-api (port 7456), so a relative base
- * avoids CORS entirely.
  */
 const baseURL = import.meta.env.VITE_API_URL || '/'
 
@@ -18,47 +12,92 @@ export const api = axios.create({
 })
 
 const TOKEN_KEY = 'dg_trade_token'
+const REFRESH_KEY = 'dg_refresh_token'
 
 export function getToken() {
-  try {
-    return localStorage.getItem(TOKEN_KEY)
-  } catch {
-    return null
-  }
+  try { return localStorage.getItem(TOKEN_KEY) } catch { return null }
 }
 
 export function setToken(token) {
   try {
     if (token) localStorage.setItem(TOKEN_KEY, token)
     else localStorage.removeItem(TOKEN_KEY)
-  } catch {
-    /* storage unavailable — the session just won't survive a reload */
-  }
+  } catch { /* storage unavailable */ }
 }
 
-// Attach the bearer token to every request (cookies cannot cross origins).
+export function getRefreshToken() {
+  try { return localStorage.getItem(REFRESH_KEY) } catch { return null }
+}
+
+export function setRefreshToken(token) {
+  try {
+    if (token) localStorage.setItem(REFRESH_KEY, token)
+    else localStorage.removeItem(REFRESH_KEY)
+  } catch { /* storage unavailable */ }
+}
+
+// Attach the bearer token to every request.
 api.interceptors.request.use(config => {
   const token = getToken()
   if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
 
+// Track if a refresh is already in flight so concurrent 401s don't each
+// trigger their own refresh request.
+let refreshPromise = null
+
 /**
- * Our API answers `{ success, data }` / `{ success:false, error }`, so unwrap
- * here and always reject with a readable Persian message.
+ * On 401: try to silently refresh the access token using the stored refresh
+ * token. If the refresh succeeds, replay the original request. If it fails
+ * (refresh token also expired/revoked), clear the session and reject so the
+ * store's error handler can show the login sheet.
  */
 api.interceptors.response.use(
   response => response.data?.data ?? response.data,
-  err => {
+  async err => {
     const status = err?.response?.status
+    const originalRequest = err?.config
+
+    if (status === 401 && !originalRequest?._retried) {
+      const refreshToken = getRefreshToken()
+
+      if (refreshToken) {
+        originalRequest._retried = true
+
+        if (!refreshPromise) {
+          refreshPromise = axios.post(`${baseURL}auth/refresh`, { refreshToken })
+            .then(res => {
+              const data = res.data?.data ?? res.data
+              setToken(data.accessToken)
+              if (data.refreshToken) setRefreshToken(data.refreshToken)
+              return data.accessToken
+            })
+            .catch(refreshErr => {
+              // Refresh token is dead — wipe everything and force re-login.
+              setToken(null)
+              setRefreshToken(null)
+              throw refreshErr
+            })
+            .finally(() => { refreshPromise = null })
+        }
+
+        try {
+          const newToken = await refreshPromise
+          originalRequest.headers.Authorization = `Bearer ${newToken}`
+          return api(originalRequest)
+        } catch {
+          // Refresh failed — fall through to the normal error path below.
+        }
+      }
+    }
+
     const message =
       err?.response?.data?.error ||
       (err?.code === 'ECONNABORTED' ? 'پاسخی از سرور دریافت نشد (تایم‌اوت)' : null) ||
       err?.message ||
       'خطای نامشخص در ارتباط با سرور'
     const error = new Error(message)
-    // Tag auth failures so stores can tell "token is dead" apart from
-    // "server unreachable" — only the former should clear the session.
     if (status === 401) error.isUnauthorized = true
     return Promise.reject(error)
   }

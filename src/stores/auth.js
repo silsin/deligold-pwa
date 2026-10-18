@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { api, setToken, getToken } from '../utils/api.js';
+import { api, setToken, getToken, setRefreshToken, getRefreshToken } from '../utils/api.js';
 import { CAPABILITIES, ROLES, can, isStaffRole, homeRouteFor } from '../utils/roles.js';
 
 /**
@@ -148,6 +148,7 @@ export const useAuthStore = defineStore('auth', () => {
       const data = await api.post('/auth/register', payload);
       token.value = data.accessToken;
       setToken(data.accessToken);
+      if (data.refreshToken) setRefreshToken(data.refreshToken);
       if (data.user) user.value = data.user;
       await Promise.all([fetchProfile(), fetchWalletBundle()]);
       return true;
@@ -171,6 +172,7 @@ export const useAuthStore = defineStore('auth', () => {
       const data = await api.post('/auth/join-invite', { code });
       token.value = data.accessToken;
       setToken(data.accessToken);
+      if (data.refreshToken) setRefreshToken(data.refreshToken);
       if (data.user) user.value = data.user;
       await Promise.all([fetchProfile(), fetchWalletBundle()]);
       return true;
@@ -189,6 +191,7 @@ export const useAuthStore = defineStore('auth', () => {
       const data = await api.post('/auth/login', { phone: identifier, password });
       token.value = data.accessToken;
       setToken(data.accessToken);
+      if (data.refreshToken) setRefreshToken(data.refreshToken);
       if (data.user) user.value = data.user;
       await Promise.all([fetchProfile(), fetchWalletBundle()]);
       return true;
