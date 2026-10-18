@@ -53,7 +53,6 @@
             <button type="button" class="row__card row__card--buy" :class="dirClass(s.symbol)" @click="quickOrder(s.symbol, 'BUY')">
               <i v-if="market.direction[s.symbol]" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
               <span class="row__price">{{ faMoney(buyPrice(s.symbol)) }}</span>
-              <span class="row__sub">{{ faMoney(market.prices[s.symbol]) }}</span>
             </button>
 
             <button type="button" class="row__name" @click="quickOrder(s.symbol, 'BUY')">
@@ -64,7 +63,6 @@
             <button type="button" class="row__card row__card--sell" :class="dirClass(s.symbol)" @click="quickOrder(s.symbol, 'SELL')">
               <i v-if="market.direction[s.symbol]" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
               <span class="row__price">{{ faMoney(sellPrice(s.symbol)) }}</span>
-              <span class="row__sub">{{ faMoney(market.prices[s.symbol]) }}</span>
             </button>
           </div>
 
@@ -77,7 +75,6 @@
             <button type="button" class="row__card row__card--buy" :class="dirClass(s.symbol)" @click="quickOrder(s.symbol, 'BUY')">
               <i v-if="market.direction[s.symbol]" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
               <span class="row__price">{{ faMoney(buyPrice(s.symbol)) }}</span>
-              <span class="row__sub">{{ faMoney(market.prices[s.symbol]) }}</span>
             </button>
 
             <span class="row__name">
