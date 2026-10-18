@@ -26,7 +26,6 @@ export const TRADE_SYMBOLS: TradeSymbol[] = [
   { symbol: 'COIN_OLD', name: 'سکه بهار آزادی (طرح قدیم)', short: 'سکه قدیم', unit: 'عدد', kind: 'coin', divisible: false },
   { symbol: 'COIN_HALF', name: 'نیم سکه', short: 'نیم سکه', unit: 'عدد', kind: 'coin', divisible: false },
   { symbol: 'COIN_QUARTER', name: 'ربع سکه', short: 'ربع سکه', unit: 'عدد', kind: 'coin', divisible: false },
-  { symbol: 'COIN_GRAM', name: 'سکه گرمی', short: 'سکه گرمی', unit: 'عدد', kind: 'coin', divisible: false },
 ];
 
 export const DEFAULT_TRADE_SYMBOL = 'GOLD18';

@@ -100,7 +100,6 @@ const FALLBACK_PRICES: Record<string, number> = {
   COIN_OLD: 258_000_000,
   COIN_HALF: 140_000_000,
   COIN_QUARTER: 75_000_000,
-  COIN_GRAM: 38_000_000,
 };
 
 @Injectable()
