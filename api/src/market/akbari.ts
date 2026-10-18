@@ -90,21 +90,22 @@ export async function fetchAkbariBoard(cfg: AkbariConfig, timeoutMs = 10_000): P
     throw new Error('akbarigold credentials missing (set MARKET_UID and MARKET_TOKEN)');
   }
 
+  const form = new URLSearchParams();
+  form.set('uID', cfg.uid);
+  form.set('uToken', cfg.token);
+  form.set('all', 'true');
+
   const res = await fetch(cfg.url, {
     method: 'POST',
     signal: AbortSignal.timeout(timeoutMs),
     headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json, text/plain, */*',
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Accept': 'application/json, text/plain, */*',
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
       'Origin': 'https://akbarigold.ir',
-      'Referer': 'https://akbarigold.ir/',
-      'Accept-Language': 'fa-IR,fa;q=0.9,en;q=0.8',
-      'sec-fetch-dest': 'empty',
-      'sec-fetch-mode': 'cors',
-      'sec-fetch-site': 'same-origin',
+      'Referer': 'https://akbarigold.ir/trade',
     },
-    body: JSON.stringify({ all: true, uID: cfg.uid, uToken: cfg.token }),
+    body: form,
   });
 
   if (!res.ok) throw new Error(`akbarigold HTTP ${res.status}`);
