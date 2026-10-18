@@ -158,12 +158,17 @@ export function akbariTwoSided(
   const isGold = row.type === 1;
   const rate = isGold ? (Number(row.rate) || 4.3318) : 1;
 
-  // Convert from Rial to Toman, then for gold from per-مثقال to per-gram
+  // Display price matches akbarigold.ir board: price - profit - masterProfit
+  // (all in Rial, masterProfit converted from Toman when moneyUnitMaster=1)
+  const masterProfitRial = Number(row.moneyUnitMaster) === 1
+    ? (Number(row.masterProfit) || 0) * 10
+    : (Number(row.masterProfit) || 0);
+
+  const profitRial = Number(row.profit) || 0;
+
   const toToman = (rial: number) => Math.round(rial / 10 / rate);
 
-  const midToman  = toToman(priceRial);
+  const midToman = toToman(priceRial - profitRial - masterProfitRial);
 
-  // Return mid price only — spread is set exclusively via broker manager
-  // board price overrides, never derived from the upstream feed.
   return { price: midToman, buy: null, sell: null };
 }
