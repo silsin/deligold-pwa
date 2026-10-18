@@ -424,7 +424,7 @@ onBeforeUnmount(() => {
 
 .row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: 1fr auto 1fr;
   gap: 6px;
   align-items: stretch;
   padding: 0;
