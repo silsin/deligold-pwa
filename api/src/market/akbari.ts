@@ -161,18 +161,9 @@ export function akbariTwoSided(
   // Convert from Rial to Toman, then for gold from per-مثقال to per-gram
   const toToman = (rial: number) => Math.round(rial / 10 / rate);
 
-  const profit       = Number(row.profit)            || 0;
-  const profitSell   = Number(row.profitSell)        || profit; // fallback to profit if 0
-  const masterBuy    = Number(row.masterProfit)      || 0;
-  const masterSell   = Number(row.masterProfitSell)  || 0;
-
   const midToman  = toToman(priceRial);
-  const buyToman  = row.allowBuy  ? toToman(priceRial + profit + masterBuy)  : null;
-  const sellToman = row.allowSell ? toToman(priceRial - profitSell - masterSell) : null;
 
-  // Sanity check: buy must be >= mid, sell must be <= mid
-  const safeBuy  = buyToman  !== null && buyToman  >= midToman ? buyToman  : (row.allowBuy  ? midToman : null);
-  const safeSell = sellToman !== null && sellToman <= midToman ? sellToman : (row.allowSell ? midToman : null);
-
-  return { price: midToman, buy: safeBuy, sell: safeSell };
+  // Return mid price only — spread is set exclusively via broker manager
+  // board price overrides, never derived from the upstream feed.
+  return { price: midToman, buy: null, sell: null };
 }
