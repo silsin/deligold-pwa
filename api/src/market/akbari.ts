@@ -97,7 +97,12 @@ export async function fetchAkbariBoard(cfg: AkbariConfig, timeoutMs = 10_000): P
       'Content-Type': 'application/json',
       Accept: 'application/json, text/plain, */*',
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
-      Origin: new URL(cfg.url).origin,
+      'Origin': 'https://akbarigold.ir',
+      'Referer': 'https://akbarigold.ir/',
+      'Accept-Language': 'fa-IR,fa;q=0.9,en;q=0.8',
+      'sec-fetch-dest': 'empty',
+      'sec-fetch-mode': 'cors',
+      'sec-fetch-site': 'same-origin',
     },
     body: JSON.stringify({ all: true, uID: cfg.uid, uToken: cfg.token }),
   });
