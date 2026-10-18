@@ -450,6 +450,9 @@ onBeforeUnmount(() => {
   font-weight: 700;
   background: none;
   border: none;
+  width: 80px;
+  flex-shrink: 0;
+  overflow: hidden;
 }
 
 /* ── Rows: three separate floating tiles, each with its own colored glow ── */
