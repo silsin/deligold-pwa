@@ -28,6 +28,15 @@ export class UsersService {
     return toPublicUser(user);
   }
 
+  /** Saves the path of the uploaded ID card image on the user record. */
+  async saveIdCardPath(userId: string, path: string): Promise<PublicUser> {
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { idCardPath: path },
+    });
+    return toPublicUser(updated);
+  }
+
   /**
    * Lets a customer edit their own name, national ID and delivery address.
    *
@@ -71,6 +80,7 @@ export class UsersService {
     if (!user.nationalId?.trim()) missing.push('nationalId');
     if (!user.phone?.trim()) missing.push('phone');
     if (!user.address?.trim()) missing.push('address');
+    if (!user.idCardPath) missing.push('idCard');
 
     return {
       complete: missing.length === 0,

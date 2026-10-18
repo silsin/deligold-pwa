@@ -25,6 +25,8 @@ export interface PublicUser {
   verified: boolean;
   verifyNote: string | null;
   address: string | null;
+  /** Path to the uploaded national ID card image. */
+  idCardPath: string | null;
   createdAt: Date;
 }
 
@@ -47,6 +49,7 @@ export function toPublicUser(user: User): PublicUser {
     verified: user.verifiedAt !== null,
     verifyNote: user.verifyNote,
     address: user.address,
+    idCardPath: user.idCardPath,
     createdAt: user.createdAt,
   };
 }

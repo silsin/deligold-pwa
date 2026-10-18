@@ -55,6 +55,23 @@
         </button>
       </section>
 
+      <!-- ID card upload -->
+      <section class="pane pay">
+        <h2 class="section-title">تصویر کارت ملی</h2>
+        <p class="pay__label">برای تأیید هویت، تصویر کارت ملی خود را بارگذاری کنید.</p>
+        <div v-if="auth.user?.idCardPath" class="idcard__preview">
+          <span class="material-icons idcard__icon">badge</span>
+          <span class="idcard__ok">تصویر بارگذاری شده ✓</span>
+        </div>
+        <label class="idcard__upload" :class="{ 'is-busy': uploadingCard }">
+          <input type="file" accept="image/jpeg,image/png,image/webp" :disabled="uploadingCard" @change="onIdCardChange" />
+          <span class="material-icons">{{ uploadingCard ? 'autorenew' : 'upload' }}</span>
+          {{ uploadingCard ? 'در حال بارگذاری…' : auth.user?.idCardPath ? 'تغییر تصویر' : 'انتخاب تصویر' }}
+        </label>
+        <p v-if="cardError" class="msg msg--err">{{ cardError }}</p>
+        <p v-if="cardOk" class="msg msg--ok">تصویر کارت ملی با موفقیت بارگذاری شد.</p>
+      </section>
+
       <section class="debt" :class="{ 'is-clear': debt <= 0 }">
         <div class="debt__top">
           <span class="debt__label"><span class="material-icons">account_balance_wallet</span> بدهی شما (نسیه)</span>
@@ -141,6 +158,9 @@ const active = ref('ALL')
 const saving = ref(false)
 const saveError = ref('')
 const saveOk = ref(false)
+const uploadingCard = ref(false)
+const cardError = ref('')
+const cardOk = ref(false)
 const form = reactive({ name: '', nationalId: '', address: '' })
 
 watch(() => auth.user, (u) => {
@@ -168,7 +188,33 @@ function missingLabel(f) {
   if (f === 'name') return 'نام'
   if (f === 'nationalId') return 'کد ملی'
   if (f === 'address') return 'آدرس'
+  if (f === 'idCard') return 'تصویر کارت ملی'
   return f
+}
+
+async function onIdCardChange(ev) {
+  const file = ev.target.files?.[0]
+  if (!file) return
+  uploadingCard.value = true
+  cardError.value = ''
+  cardOk.value = false
+  try {
+    const form = new FormData()
+    form.append('file', file)
+    const { api } = await import('../utils/api.js')
+    const data = await api.post('/users/me/id-card', form, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    if (data?.idCardPath) {
+      await auth.fetchProfile()
+      cardOk.value = true
+    }
+  } catch (e) {
+    cardError.value = e?.message || 'بارگذاری تصویر ناموفق بود'
+  } finally {
+    uploadingCard.value = false
+    ev.target.value = ''
+  }
 }
 async function submitProfile() {
   saving.value = true
@@ -329,5 +375,13 @@ onMounted(() => { refresh() })
 .logout .material-icons { font-size: 18px; }
 .stat__label { font-size: 10px; color: var(--text-muted); }
 .stat__value { font-size: 12.5px; font-weight: 800; }
+.profile__live.is-unverified { background: var(--down-soft); color: var(--down); }
+.idcard__preview { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 10px; background: var(--up-soft); color: var(--up); font-size: 13px; font-weight: 700; }
+.idcard__icon { font-size: 22px; }
+.idcard__ok { flex: 1; }
+.idcard__upload { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 13px; border-radius: 12px; border: 1.5px dashed var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--accent); font-size: 14px; font-weight: 800; cursor: pointer; transition: opacity 0.15s; }
+.idcard__upload input { display: none; }
+.idcard__upload.is-busy { opacity: 0.6; pointer-events: none; }
+.idcard__upload .material-icons { font-size: 20px; }
 </style>
 

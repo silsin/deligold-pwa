@@ -205,7 +205,6 @@ const router = useRouter()
 const showTerms = ref(false)
 const refreshing = ref(false)
 const balanceAt = ref(Date.now())
-const marketFee = auth.feePercent || 0.5
 const showTicker = ref(loadTickerPref())
 
 // Quick order from the board — customer-only. Guests get the login sheet,
@@ -215,21 +214,18 @@ const quickSymbol = ref('')
 const quickSide = ref('BUY')
 
 /**
- * Buy = what the customer pays (base + fee), Sell = what they receive
- * (base − fee) — matches how /trade/orders actually settles.
+ * Buy/sell prices — only shown when the broker manager has explicitly set a
+ * spread via the board price override. If no spread exists, both return the
+ * mid price so the tile shows one number, not three.
  */
 function buyPrice(symbol) {
   const q = market.buys[symbol]
-  if (q) return q
-  const p = market.prices[symbol]
-  return p ? Math.round(p * (1 + marketFee / 100)) : 0
+  return q ?? market.prices[symbol] ?? 0
 }
 
 function sellPrice(symbol) {
   const q = market.sells[symbol]
-  if (q) return q
-  const p = market.prices[symbol]
-  return p ? Math.round(p * (1 - marketFee / 100)) : 0
+  return q ?? market.prices[symbol] ?? 0
 }
 
 function dirClass(symbol) {

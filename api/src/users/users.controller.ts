@@ -1,4 +1,7 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Put } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Put, UploadedFile, UseInterceptors, BadRequestException } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname, join } from 'path';
 import { Role } from '@prisma/client';
 import { CurrentUser, type AuthUser } from '../auth/current-user.decorator';
 import { Roles } from '../auth/roles.decorator';
@@ -47,6 +50,42 @@ export class UsersController {
   @Patch('me')
   updateMe(@CurrentUser() user: AuthUser, @Body() dto: UpdateProfileDto) {
     return this.users.updateOwnProfile(user.userId, dto);
+  }
+
+  /**
+   * Upload a national ID card image. Stored in UPLOAD_DIR/id-cards/.
+   * Accepts JPEG, PNG, WEBP up to 5 MB.
+   */
+  @Post('me/id-card')
+  @UseInterceptors(FileInterceptor('file', {
+    storage: diskStorage({
+      destination: (req, file, cb) => {
+        const dir = join(process.env.UPLOAD_DIR || './uploads', 'id-cards');
+        require('fs').mkdirSync(dir, { recursive: true });
+        cb(null, dir);
+      },
+      filename: (req, file, cb) => {
+        const userId = (req as any).user?.userId ?? 'unknown';
+        const ext = extname(file.originalname).toLowerCase() || '.jpg';
+        cb(null, `${userId}-${Date.now()}${ext}`);
+      },
+    }),
+    fileFilter: (req, file, cb) => {
+      const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+      if (!allowed.includes(file.mimetype)) {
+        return cb(new BadRequestException('فقط تصاویر JPEG، PNG یا WEBP قابل قبول هستند'), false);
+      }
+      cb(null, true);
+    },
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  }))
+  async uploadIdCard(
+    @CurrentUser() user: AuthUser,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) throw new BadRequestException('فایلی ارسال نشده است');
+    const relativePath = `id-cards/${file.filename}`;
+    return this.users.saveIdCardPath(user.userId, relativePath);
   }
 
   // ── Staff ─────────────────────────────────────────────────────────────────

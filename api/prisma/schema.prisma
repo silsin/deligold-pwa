@@ -65,6 +65,9 @@ model User {
   /// than collected in person.
   address      String?
 
+  /// Path to the uploaded national ID card image, stored on the server.
+  idCardPath   String?
+
   orders       Order[]
   reviews      Order[]  @relation("OrderReviewedBy")
 

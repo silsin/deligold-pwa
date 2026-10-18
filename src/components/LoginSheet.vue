@@ -59,12 +59,12 @@
               <span v-else>{{ authGate.pendingInvite.reason }} — ثبت‌نام بدون دعوت‌نامه انجام می‌شود.</span>
             </div>
             <label class="sheet__field">
-              <span>نام</span>
-              <input v-model="name" type="text" autocomplete="name" placeholder="نام و نام خانوادگی" />
+              <span>کد ملی</span>
+              <input v-model="nationalId" type="text" inputmode="numeric" placeholder="۰۰۱۲۳۴۵۶۷۸" required />
             </label>
             <label class="sheet__field">
-              <span>کد ملی (اختیاری)</span>
-              <input v-model="nationalId" type="text" inputmode="numeric" placeholder="۰۰۱۲۳۴۵۶۷۸" />
+              <span>نام و نام خانوادگی</span>
+              <input v-model="name" type="text" autocomplete="name" placeholder="نام و نام خانوادگی" required />
             </label>
           </template>
 
