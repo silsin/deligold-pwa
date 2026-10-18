@@ -231,8 +231,30 @@ export class MarketService implements OnModuleInit, OnModuleDestroy {
 
     const missing = () => TRADE_SYMBOLS.some(s => !quotes[s.symbol]);
 
-    // 1. TGJU — fast JSON API, reachable from this server, primary source.
-    if (choice === 'tgju' || choice === 'auto') {
+    // 1. Akbari — primary source, real per-side margins, credentials required.
+    if (choice === 'akbari' || choice === 'auto') {
+      try {
+        const cfg = akbariConfig();
+        if (akbariConfigured(cfg)) {
+          const upstream = await fetchAkbariBoard(cfg);
+          const akQuotes = this.mapUpstream(upstream);
+          for (const symbol of Object.keys(akQuotes)) {
+            if (quotes[symbol]) continue;
+            quotes[symbol] = akQuotes[symbol];
+            freshSymbols.add(symbol);
+            if (!primarySource) primarySource = 'akbari';
+            updatedAt = upstream.updatedAt;
+          }
+        } else {
+          this.logger.warn('Akbari credentials not set — skipping primary source');
+        }
+      } catch (err) {
+        this.logger.warn(`akbari fetch failed: ${String(err)}`);
+      }
+    }
+
+    // 2. TGJU — gap-fill anything Akbari missed.
+    if (missing() && (choice === 'tgju' || choice === 'auto')) {
       try {
         const board = await fetchTgjuBoard();
         const memoKeys = new Set(board.staleRates);
@@ -250,7 +272,7 @@ export class MarketService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    // 2. ESTJT — official union, try as gap-fill (may be blocked from some IPs).
+    // 3. ESTJT — official union, try as last live gap-fill (may be blocked from some IPs).
     if (missing() && (choice === 'estjt' || choice === 'auto')) {
       try {
         const board = await fetchEstjtBoard();
@@ -264,26 +286,6 @@ export class MarketService implements OnModuleInit, OnModuleDestroy {
         }
       } catch (err) {
         this.logger.warn(`estjt fetch failed: ${String(err)}`);
-      }
-    }
-
-    // 3. Akbari — internal shop system, real per-side margins.
-    if (missing() && (choice === 'akbari' || choice === 'auto')) {
-      try {
-        const cfg = akbariConfig();
-        if (akbariConfigured(cfg)) {
-          const upstream = await fetchAkbariBoard(cfg);
-          const akQuotes = this.mapUpstream(upstream);
-          for (const symbol of Object.keys(akQuotes)) {
-            if (quotes[symbol]) continue;
-            quotes[symbol] = akQuotes[symbol];
-            freshSymbols.add(symbol);
-            if (!primarySource) primarySource = 'akbari';
-            updatedAt = upstream.updatedAt;
-          }
-        }
-      } catch (err) {
-        this.logger.warn(`akbari fetch failed: ${String(err)}`);
       }
     }
 
