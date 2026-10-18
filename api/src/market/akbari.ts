@@ -158,17 +158,16 @@ export function akbariTwoSided(
   const isGold = row.type === 1;
   const rate = isGold ? (Number(row.rate) || 4.3318) : 1;
 
-  // Display price matches akbarigold.ir board: price - profit - masterProfit
-  // (all in Rial, masterProfit converted from Toman when moneyUnitMaster=1)
-  const masterProfitRial = Number(row.moneyUnitMaster) === 1
-    ? (Number(row.masterProfit) || 0) * 10
-    : (Number(row.masterProfit) || 0);
-
-  const profitRial = Number(row.profit) || 0;
+  // Display price matches akbarigold.ir board.
+  // All margin fields (profit, masterProfit) are in Rial regardless of moneyUnitMaster.
+  // Formula: (price - profit - masterProfit) / 10 / rate
+  const profitRial      = Number(row.profit)       || 0;
+  const masterProfitRial = Number(row.masterProfit) || 0;
 
   const toToman = (rial: number) => Math.round(rial / 10 / rate);
 
   const midToman = toToman(priceRial - profitRial - masterProfitRial);
+  if (midToman <= 0) return null;
 
   return { price: midToman, buy: null, sell: null };
 }
