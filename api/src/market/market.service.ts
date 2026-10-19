@@ -187,14 +187,14 @@ export class MarketService implements OnModuleInit, OnModuleDestroy {
    * one-way and avoids a constructor cycle.
    */
   async boardForBroker(brokerId: string): Promise<Board> {
-    const board = await this.board();
+    // Use the cached board directly — avoids waiting for an in-flight Akbari
+    // fetch which can take 8+ s. The cache is at most 60 s old, which is fine
+    // for broker margin calculations. If no cache exists yet, do a full fetch.
+    const board = this.cache ?? await this.board();
 
     let rules: BrokerPriceRule[];
     try {
-      rules = await Promise.race([
-        this.prisma.brokerPriceRule.findMany({ where: { brokerId, enabled: true } }),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('rules query timeout')), 3_000)),
-      ]) as BrokerPriceRule[];
+      rules = await this.prisma.brokerPriceRule.findMany({ where: { brokerId, enabled: true } });
     } catch (err) {
       this.logger.warn(`could not read broker pricing rules, serving raw board: ${String(err)}`);
       return board;
