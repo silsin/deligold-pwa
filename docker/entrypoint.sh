@@ -35,7 +35,7 @@ if [ -n "${API_UPSTREAM:-}" ]; then
     # src/utils/api.js works with no CORS and no rebuild. NestJS routes carry
     # no /api prefix, so all nine are matched explicitly; '(|\$)' also covers
     # bare '/stores' (no trailing slash).
-    location ~ ^/(auth|users|invites|trade|wallet|market|reports|stores|uploads)(|\$) {
+    location ~ ^/(auth|users|invites|trade|wallet|market|reports|stores|uploads|broker-pricing|store-logos)(|\$) {
         # A variable proxy_pass needs a resolver: nginx must resolve the target
         # per-request, because the API container may not exist yet at boot time
         # and a startup-time lookup failure would be fatal.

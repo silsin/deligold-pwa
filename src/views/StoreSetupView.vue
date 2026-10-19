@@ -11,9 +11,12 @@
     <!-- No store yet -->
     <div v-if="!loading && !storeId" class="empty">
       <i class="material-icons empty__icon">store_mall_directory</i>
-      <p class="empty__text">هنوز فروشگاهی ثبت نشده است؛ ابتدا یک فروشگاه بسازید.</p>
-      <button type="button" class="btn btn--primary" @click="router.push('/stores')">
-        <i class="material-icons">storefront</i> ایجاد فروشگاه
+      <p class="empty__text">هنوز فروشگاهی ثبت نشده است. نام فروشگاه خود را وارد کنید:</p>
+      <input v-model="newStoreName" type="text" class="pay__input" placeholder="نام فروشگاه" style="width:100%;max-width:320px" />
+      <p v-if="createError" class="msg msg--err">{{ createError }}</p>
+      <button type="button" class="btn btn--primary" :disabled="creating || !newStoreName.trim()" @click="createStore">
+        <i class="material-icons">{{ creating ? 'autorenew' : 'add_business' }}</i>
+        {{ creating ? 'در حال ساخت…' : 'ساخت فروشگاه' }}
       </button>
     </div>
 
@@ -123,16 +126,20 @@
 
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import { api, apiBase } from '../utils/api.js'
 import { faMoney } from '../utils/format.js'
 
 const router = useRouter()
 
-const loading = ref(false)
+ = ref(false)
 const error = ref('')
 const storeId = ref('')
 const store = ref(null)
+
+// Store creation
+const newStoreName = ref('')
+const creating = ref(false)
+const createError = ref('')
 
 // Store details form
 const form = reactive({ name: '', description: '', phone: '', address: '' })
@@ -156,6 +163,29 @@ const logoPreview = ref('')
 function buildLogoUrl(path) {
   if (!path) return ''
   return `${apiBase.replace(/\/$/, '')}/${path}`
+}
+
+async function createStore() {
+  const name = newStoreName.value.trim()
+  if (!name) return
+  creating.value = true
+  createError.value = ''
+  try {
+    const data = await api.post('/stores', { name })
+    if (data?.id) {
+      store.value = data
+      storeId.value = data.id
+      form.name = data.name ?? ''
+      form.description = data.description ?? ''
+      form.phone = data.phone ?? ''
+      form.address = data.address ?? ''
+      newStoreName.value = ''
+    }
+  } catch (e) {
+    createError.value = e?.message || 'ساخت فروشگاه ناموفق بود'
+  } finally {
+    creating.value = false
+  }
 }
 
 async function loadAll() {
