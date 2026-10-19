@@ -38,20 +38,44 @@
 
         <div class="grid">
           <div class="cell">
-            <label class="pay__label">حاشیه خرید (تومان)</label>
-            <input v-model.number="rules[s.symbol].buyMarginToman" type="number" min="0" step="1" inputmode="numeric" class="pay__input tnum" />
+            <label class="pay__label">خرید — حاشیه (تومان)</label>
+            <div class="stepper">
+              <button type="button" class="stepper__btn" @click="step(s.symbol, 'buyMarginToman', -100000)">−</button>
+              <button type="button" class="stepper__btn" @click="step(s.symbol, 'buyMarginToman', -10000)">−−</button>
+              <span class="stepper__val tnum">{{ faNumber(rules[s.symbol].buyMarginToman) }}</span>
+              <button type="button" class="stepper__btn stepper__btn--up" @click="step(s.symbol, 'buyMarginToman', 10000)">++</button>
+              <button type="button" class="stepper__btn stepper__btn--up" @click="step(s.symbol, 'buyMarginToman', 100000)">+</button>
+            </div>
           </div>
           <div class="cell">
-            <label class="pay__label">حاشیه خرید (درصد)</label>
-            <input v-model.number="rules[s.symbol].buyMarginPercent" type="number" min="0" step="0.01" inputmode="decimal" class="pay__input tnum" />
+            <label class="pay__label">فروش — حاشیه (تومان)</label>
+            <div class="stepper">
+              <button type="button" class="stepper__btn" @click="step(s.symbol, 'sellMarginToman', -100000)">−</button>
+              <button type="button" class="stepper__btn" @click="step(s.symbol, 'sellMarginToman', -10000)">−−</button>
+              <span class="stepper__val tnum">{{ faNumber(rules[s.symbol].sellMarginToman) }}</span>
+              <button type="button" class="stepper__btn stepper__btn--up" @click="step(s.symbol, 'sellMarginToman', 10000)">++</button>
+              <button type="button" class="stepper__btn stepper__btn--up" @click="step(s.symbol, 'sellMarginToman', 100000)">+</button>
+            </div>
           </div>
           <div class="cell">
-            <label class="pay__label">حاشیه فروش (تومان)</label>
-            <input v-model.number="rules[s.symbol].sellMarginToman" type="number" min="0" step="1" inputmode="numeric" class="pay__input tnum" />
+            <label class="pay__label">خرید — درصد</label>
+            <div class="stepper">
+              <button type="button" class="stepper__btn" @click="step(s.symbol, 'buyMarginPercent', -0.5)">−</button>
+              <button type="button" class="stepper__btn" @click="step(s.symbol, 'buyMarginPercent', -0.1)">−−</button>
+              <span class="stepper__val tnum">{{ rules[s.symbol].buyMarginPercent }}٪</span>
+              <button type="button" class="stepper__btn stepper__btn--up" @click="step(s.symbol, 'buyMarginPercent', 0.1)">++</button>
+              <button type="button" class="stepper__btn stepper__btn--up" @click="step(s.symbol, 'buyMarginPercent', 0.5)">+</button>
+            </div>
           </div>
           <div class="cell">
-            <label class="pay__label">حاشیه فروش (درصد)</label>
-            <input v-model.number="rules[s.symbol].sellMarginPercent" type="number" min="0" step="0.01" inputmode="decimal" class="pay__input tnum" />
+            <label class="pay__label">فروش — درصد</label>
+            <div class="stepper">
+              <button type="button" class="stepper__btn" @click="step(s.symbol, 'sellMarginPercent', -0.5)">−</button>
+              <button type="button" class="stepper__btn" @click="step(s.symbol, 'sellMarginPercent', -0.1)">−−</button>
+              <span class="stepper__val tnum">{{ rules[s.symbol].sellMarginPercent }}٪</span>
+              <button type="button" class="stepper__btn stepper__btn--up" @click="step(s.symbol, 'sellMarginPercent', 0.1)">++</button>
+              <button type="button" class="stepper__btn stepper__btn--up" @click="step(s.symbol, 'sellMarginPercent', 0.5)">+</button>
+            </div>
           </div>
         </div>
 
@@ -239,6 +263,15 @@ async function clearRule(symbol) {
   }
 }
 
+function step(symbol, field, delta) {
+  const r = rules[symbol]
+  if (!r) return
+  const current = Number(r[field]) || 0
+  // Round to avoid floating point drift on percent fields
+  const next = Math.round((current + delta) * 10000) / 10000
+  r[field] = next
+}
+
 async function reload() {
   await market.fetchMarket({ withChart: false })
   await loadRules()
@@ -278,6 +311,12 @@ onMounted(async () => {
 
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
 .cell { display: flex; flex-direction: column; gap: 5px; }
+.stepper { display: flex; align-items: center; gap: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 4px 6px; }
+.stepper__val { flex: 1; text-align: center; font-size: 13.5px; font-weight: 800; min-width: 60px; }
+.stepper__btn { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--down); font-size: 15px; font-weight: 900; flex-shrink: 0; }
+.stepper__btn--up { color: var(--up); }
+.stepper__btn:active { opacity: 0.7; }
+
 .pay__label { font-size: 11.5px; font-weight: 700; color: var(--text-muted); }
 .pay__input { width: 100%; padding: 11px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 14px; outline: none; }
 .pay__input:focus { border-color: var(--accent); }
