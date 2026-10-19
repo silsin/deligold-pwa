@@ -191,9 +191,11 @@ export class MarketService implements OnModuleInit, OnModuleDestroy {
 
     let rules: BrokerPriceRule[];
     try {
-      rules = await this.prisma.brokerPriceRule.findMany({ where: { brokerId, enabled: true } });
+      rules = await Promise.race([
+        this.prisma.brokerPriceRule.findMany({ where: { brokerId, enabled: true } }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('rules query timeout')), 3_000)),
+      ]) as BrokerPriceRule[];
     } catch (err) {
-      // Rules are an enhancement; the raw board is still valid without them.
       this.logger.warn(`could not read broker pricing rules, serving raw board: ${String(err)}`);
       return board;
     }
