@@ -129,9 +129,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { api, apiBase } from '../utils/api.js'
 import { faMoney } from '../utils/format.js'
 
-const router = useRouter()
-
- = ref(false)
+const loading = ref(false)
 const error = ref('')
 const storeId = ref('')
 const store = ref(null)
