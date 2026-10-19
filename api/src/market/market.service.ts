@@ -1,5 +1,5 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { BoardPrice, Prisma } from '@prisma/client';
+import { BoardPrice, BrokerPriceRule, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { TradeError } from '../common/errors';
 import { TRADE_SYMBOLS, isTradeSymbol } from './symbols';
@@ -172,6 +172,61 @@ export class MarketService implements OnModuleInit, OnModuleDestroy {
    */
   invalidate(): void {
     this.cache = null;
+  }
+
+  /**
+   * The board with one broker's pricing rules layered on top.
+   *
+   * Reads the live board (feed + manual overrides) then, for every symbol the
+   * broker has an enabled rule for, recomputes the buy/sell from the raw `price`
+   * plus the broker's margin — so two brokers can quote different spreads off
+   * the same market price. Symbols with no rule keep the feed's own buy/sell.
+   *
+   * The rules are read straight from Prisma (not via BrokerPricingService) so
+   * MarketService never depends on the pricing module — keeps the dependency
+   * one-way and avoids a constructor cycle.
+   */
+  async boardForBroker(brokerId: string): Promise<Board> {
+    const board = await this.board();
+
+    let rules: BrokerPriceRule[];
+    try {
+      rules = await this.prisma.brokerPriceRule.findMany({ where: { brokerId, enabled: true } });
+    } catch (err) {
+      // Rules are an enhancement; the raw board is still valid without them.
+      this.logger.warn(`could not read broker pricing rules, serving raw board: ${String(err)}`);
+      return board;
+    }
+    if (!rules.length) return board;
+
+    const quotes: Record<string, Quote> = { ...board.quotes };
+    for (const rule of rules) {
+      const quote = quotes[rule.symbol];
+      if (!quote) continue;
+
+      const rawPrice = quote.price;
+      const buyToman = Number(rule.buyMarginToman) || 0;
+      const sellToman = Number(rule.sellMarginToman) || 0;
+      const buyPct = Number(rule.buyMarginPercent) || 0;
+      const sellPct = Number(rule.sellMarginPercent) || 0;
+
+      let buy: number | null = rawPrice + buyToman + Math.round((rawPrice * buyPct) / 100);
+      let sell: number | null = rawPrice - sellToman - Math.round((rawPrice * sellPct) / 100);
+
+      if (!rule.allowBuy) buy = null;
+      if (!rule.allowSell) sell = null;
+
+      // No margin at all and both sides open → no spread; show only the mid (the
+      // client applies its own fee model), matching the public-source behaviour.
+      if (buyToman === 0 && sellToman === 0 && buyPct === 0 && sellPct === 0 && rule.allowBuy && rule.allowSell) {
+        buy = null;
+        sell = null;
+      }
+
+      quotes[rule.symbol] = { ...quote, buy, sell };
+    }
+
+    return { ...board, quotes };
   }
 
   /** Price for one symbol, or null when the board does not carry it. */

@@ -12,6 +12,7 @@ import { ReportsModule } from './reports/reports.module';
 import { StoresModule } from './stores/stores.module';
 import { InvitesModule } from './invites/invites.module';
 import { PermissionsModule } from './permissions/permissions.module';
+import { BrokerPricingModule } from './broker-pricing/broker-pricing.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 
@@ -29,6 +30,7 @@ import { RolesGuard } from './auth/guards/roles.guard';
     StoresModule,
     InvitesModule,
     PermissionsModule,
+    BrokerPricingModule,
   ],
   providers: [
     // Order matters: JwtAuthGuard attaches the user, then RolesGuard reads it.

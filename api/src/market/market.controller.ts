@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Put, Query } from '@nestjs/common';
 import { IsBoolean, IsNumber, IsOptional, Min } from 'class-validator';
 import { Role } from '@prisma/client';
 import { Public } from '../auth/public.decorator';
@@ -65,11 +65,16 @@ export class MarketController {
   /**
    * The live board plus the symbol catalogue, in the shape the PWA's market
    * store already expects (`quotes` keyed by symbol).
+   *
+   * An optional `?brokerId=` switches to the broker-scoped board, where each
+   * symbol's buy/sell is recomputed from the broker's pricing-rule margins on
+   * top of the live raw price — so a customer sees and trades at their broker's
+   * numbers rather than the raw feed.
    */
   @Public()
   @Get('board')
-  async board() {
-    const b = await this.market.board();
+  async board(@Query('brokerId') brokerId?: string) {
+    const b = brokerId ? await this.market.boardForBroker(brokerId) : await this.market.board();
     return {
       symbols: TRADE_SYMBOLS,
       quotes: b.quotes,

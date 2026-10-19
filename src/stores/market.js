@@ -120,7 +120,16 @@ export const useMarketStore = defineStore('market', () => {
     if (!background) loading.value = true;
     error.value = '';
     try {
-      const data = await api.get('/market/board');
+      // A signed-in customer belongs to a broker whose pricing rules adjust the
+      // board. useAuthStore is imported lazily here so the market store never
+      // pulls the auth store at module load — keeps the dependency one-way.
+      const { useAuthStore } = await import('../stores/auth.js');
+      const auth = useAuthStore();
+      const brokerId = auth.user?.brokerId;
+      const boardUrl = brokerId
+        ? `/market/board?brokerId=${encodeURIComponent(brokerId)}`
+        : '/market/board';
+      const data = await api.get(boardUrl);
       
       // Only update symbols if they actually changed
       if (Array.isArray(data.symbols) && data.symbols.length > 0) {

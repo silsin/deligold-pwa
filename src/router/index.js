@@ -21,6 +21,7 @@ import StoreView from '../views/StoreView.vue'
 const CustomersView = () => import('../views/CustomersView.vue')
 const JoinView = () => import('../views/JoinView.vue')
 const StoreSetupView = () => import('../views/StoreSetupView.vue')
+const PricingRulesView = () => import('../views/PricingRulesView.vue')
 
 /**
  * Live gold/silver trading app. Home is the price board (خرید/فروش quotes),
@@ -74,6 +75,8 @@ const routes = [
   { path: '/store', name: 'store', component: StoreView, meta: { title: 'فروشگاه' } },
   // Broker manager store setup.
   { path: '/store-setup', name: 'store-setup', component: StoreSetupView, meta: { title: 'تنظیمات فروشگاه', requiresAuth: true, roles: STAFF_ROLES } },
+  // Broker manager per-symbol pricing rules (margin on the live raw price).
+  { path: '/pricing-rules', name: 'pricing-rules', component: PricingRulesView, meta: { title: 'قوانین قیمت‌گذاری', requiresAuth: true, roles: STAFF_ROLES } },
   // Unknown path → the board, never a blank screen.
   { path: '/:pathMatch(.*)*', redirect: '/' }
 ]

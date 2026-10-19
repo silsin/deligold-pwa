@@ -117,6 +117,8 @@ model Broker {
   accounts  Account[]
   /// Invite codes generated for this organisation.
   invites   Invite[]
+  /// Per-symbol pricing rules a broker layers on top of the live raw price.
+  priceRules BrokerPriceRule[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -615,6 +617,45 @@ model BoardPrice {
   /// Who set this price, for the audit trail. Null = seeded/system.
   updatedById String?
   updatedAt DateTime @updatedAt
+}
+
+// ── Per-broker pricing rules (margin on the live raw price) ──────────────
+
+/// A broker's margin rule for one symbol, layered on top of the live raw price.
+///
+/// The live feed drives the raw `price`. A broker manager adds a margin
+/// (fixed Toman and/or a percent) to derive the buy/sell numbers their
+/// customers trade at, so two brokers can quote different spreads off the
+/// same market price. A symbol with no row (or `enabled = false`) keeps
+/// following the live feed's own buy/sell.
+///
+/// Only staff (BROKER_MANAGER and above) can write these; customers never can.
+model BrokerPriceRule {
+  id               String   @id @default(uuid())
+  brokerId         String
+  broker           Broker   @relation(fields: [brokerId], references: [id], onDelete: Cascade)
+  symbol           String
+  /// When false the symbol falls back to the live feed entirely.
+  enabled          Boolean  @default(true)
+  /// Close only the buy side (customer cannot buy).
+  allowBuy         Boolean  @default(true)
+  /// Close only the sell side (customer cannot sell).
+  allowSell        Boolean  @default(true)
+  /// Fixed Toman added to the raw price for the buy side.
+  buyMarginToman   Decimal  @default(0)
+  /// Fixed Toman subtracted from the raw price for the sell side.
+  sellMarginToman  Decimal  @default(0)
+  /// Percent of the raw price added to the buy side.
+  buyMarginPercent  Decimal @default(0)
+  /// Percent of the raw price subtracted from the sell side.
+  sellMarginPercent Decimal @default(0)
+  /// Who last changed this rule, for the audit trail. Null = seeded/system.
+  updatedById      String?
+  updatedAt        DateTime @updatedAt
+
+  /// One rule per broker per symbol.
+  @@unique([brokerId, symbol])
+  @@index([brokerId])
 }
 
 // ── Audit ───────────────────────────────────────────────────────────────────

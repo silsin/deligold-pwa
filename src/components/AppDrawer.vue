@@ -94,6 +94,9 @@
             <button v-if="auth.isBrokerManager || auth.isBrokerAdmin || auth.isSuperAdmin" type="button" class="drawer__item" @click="go('/store-setup')">
               <i class="material-icons">store</i> تنظیمات فروشگاه
             </button>
+            <button v-if="auth.isBrokerManager || auth.isBrokerAdmin || auth.isSuperAdmin" type="button" class="drawer__item" @click="go('/pricing-rules')">
+              <i class="material-icons">price_change</i> قوانین قیمت‌گذاری
+            </button>
             <button v-if="auth.canViewReports" type="button" class="drawer__item" @click="go('/reports')">
               <i class="material-icons">assessment</i> گزارش‌ها
             </button>
