@@ -302,11 +302,17 @@ async function retryFetch() {
   await market.fetchStats()
 }
 
-onMounted(() => {
+onMounted(async () => {
   void market.fetchMarket({ withChart: false, record: true })
   void market.fetchStats()
   market.startPolling(15000)
-  if (auth.isLoggedIn) void auth.fetchAccount()
+  if (auth.isLoggedIn) {
+    await auth.fetchAccount()
+    // Re-fetch market with brokerId now that user is loaded
+    if (auth.user?.brokerId) {
+      void market.fetchMarket({ withChart: false, background: true })
+    }
+  }
   window.addEventListener('storage', refreshBoardPrefs)
   window.addEventListener('dg-board-prefs', refreshBoardPrefs)
   window.addEventListener('dg-ticker-pref', refreshTickerPref)
