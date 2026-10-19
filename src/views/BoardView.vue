@@ -35,6 +35,14 @@
         <span class="board__update-time">{{ faJalaliDateTime(market.updatedAt) }}</span>
       </div>
 
+      <!-- Store button: customers who joined a broker can open its shopfront. -->
+      <div v-if="auth.isLoggedIn && auth.user?.brokerId" class="board__store-wrap">
+        <button type="button" class="board__store-btn" @click="router.push('/store')">
+          <i class="material-icons">storefront</i>
+          <span>فروشگاه</span>
+        </button>
+      </div>
+
       <!-- Column headers -->
       <div class="board__head">
         <span class="board__head-buy">می‌خرید</span>
@@ -367,6 +375,26 @@ onBeforeUnmount(() => {
 }
 
 .board__update-time {
+  font-weight: 800;
+}
+
+/* Store shortcut pill under the last-update strip. */
+.board__store-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 10px;
+}
+
+.board__store-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--accent);
+  font-size: 12px;
   font-weight: 800;
 }
 

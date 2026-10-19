@@ -5,6 +5,10 @@ import axios from 'axios'
  */
 const baseURL = import.meta.env.VITE_API_URL || '/'
 
+/** Public API origin (no trailing slash) — used to build uploaded-file URLs
+ *  like store logos. */
+export const apiBase = import.meta.env.VITE_API_URL || ''
+
 export const api = axios.create({
   baseURL,
   timeout: 20000,

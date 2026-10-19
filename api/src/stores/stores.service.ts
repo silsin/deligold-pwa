@@ -12,8 +12,31 @@ export interface StoreView {
   name: string;
   address: string | null;
   active: boolean;
+  description: string | null;
+  phone: string | null;
+  logoPath: string | null;
   holdings: Array<{ symbol: string; grams: number; avgCost: number; marketValue: number }>;
   createdAt: Date;
+}
+
+export interface StoreProductView {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number | null;
+  unit: string | null;
+  active: boolean;
+  sortId: number;
+}
+
+export interface StorePublicView {
+  id: string;
+  name: string;
+  description: string | null;
+  phone: string | null;
+  address: string | null;
+  logoPath: string | null;
+  products: StoreProductView[];
 }
 
 /** A broker id matching nothing, so an unscoped staff account gets an empty list. */
@@ -70,6 +93,190 @@ export class StoresService {
       include: { holdings: true },
     });
     return this.storeView(store);
+  }
+
+  /** Update store details (name, description, phone, address). */
+  async updateStore(
+    actor: { role: Role; brokerId: string | null },
+    storeId: string,
+    dto: { name?: string; description?: string; phone?: string; address?: string },
+  ): Promise<StoreView> {
+    const store = await this.prisma.store.findUnique({
+      where: { id: storeId },
+      include: { holdings: true },
+    });
+    if (!store) throw new TradeError('فروشگاه یافت نشد', 404);
+    if (actor.role !== Role.SUPER_ADMIN && store.brokerId !== (actor.brokerId ?? NO_BROKER)) {
+      throw new TradeError('این فروشگاه متعلق به سازمان شما نیست', 403);
+    }
+
+    const data: Prisma.StoreUpdateInput = {};
+    if (dto.name !== undefined) {
+      const name = dto.name.trim();
+      if (!name) throw new TradeError('نام فروشگاه الزامی است');
+      data.name = name;
+    }
+    if (dto.description !== undefined) data.description = dto.description?.trim() || null;
+    if (dto.phone !== undefined) data.phone = dto.phone?.trim() || null;
+    if (dto.address !== undefined) data.address = dto.address?.trim() || null;
+
+    const updated = await this.prisma.store.update({
+      where: { id: storeId },
+      data,
+      include: { holdings: true },
+    });
+    return this.storeView(updated);
+  }
+
+  /** Store the relative logo path returned from multer. */
+  async updateLogo(
+    actor: { role: Role; brokerId: string | null },
+    storeId: string,
+    relativePath: string,
+  ): Promise<StoreView> {
+    const store = await this.prisma.store.findUnique({
+      where: { id: storeId },
+      include: { holdings: true },
+    });
+    if (!store) throw new TradeError('فروشگاه یافت نشد', 404);
+    if (actor.role !== Role.SUPER_ADMIN && store.brokerId !== (actor.brokerId ?? NO_BROKER)) {
+      throw new TradeError('این فروشگاه متعلق به سازمان شما نیست', 403);
+    }
+
+    const updated = await this.prisma.store.update({
+      where: { id: storeId },
+      data: { logoPath: relativePath },
+      include: { holdings: true },
+    });
+    return this.storeView(updated);
+  }
+
+  /** Public view: active stores for a broker, each with their active products. */
+  async getPublicStores(brokerId: string): Promise<StorePublicView[]> {
+    const stores = await this.prisma.store.findMany({
+      where: { brokerId, active: true },
+      include: {
+        products: {
+          where: { active: true },
+          orderBy: [{ sortId: 'asc' }, { createdAt: 'asc' }],
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    return stores.map(s => ({
+      id: s.id,
+      name: s.name,
+      description: s.description,
+      phone: s.phone,
+      address: s.address,
+      logoPath: s.logoPath,
+      products: s.products.map(p => this.productView(p)),
+    }));
+  }
+
+  /** All products for a store — staff/same-broker only. */
+  async listProducts(
+    actor: { role: Role; brokerId: string | null },
+    storeId: string,
+  ): Promise<StoreProductView[]> {
+    const store = await this.prisma.store.findUnique({ where: { id: storeId } });
+    if (!store) throw new TradeError('فروشگاه یافت نشد', 404);
+    if (actor.role !== Role.SUPER_ADMIN && store.brokerId !== (actor.brokerId ?? NO_BROKER)) {
+      throw new TradeError('این فروشگاه متعلق به سازمان شما نیست', 403);
+    }
+
+    const products = await this.prisma.storeProduct.findMany({
+      where: { storeId },
+      orderBy: [{ sortId: 'asc' }, { createdAt: 'asc' }],
+    });
+    return products.map(p => this.productView(p));
+  }
+
+  /** Create a new product in a store. */
+  async createProduct(
+    actor: { role: Role; brokerId: string | null },
+    storeId: string,
+    dto: { name: string; description?: string; price?: number; unit?: string; active?: boolean; sortId?: number },
+  ): Promise<StoreProductView> {
+    const store = await this.prisma.store.findUnique({ where: { id: storeId } });
+    if (!store) throw new TradeError('فروشگاه یافت نشد', 404);
+    if (actor.role !== Role.SUPER_ADMIN && store.brokerId !== (actor.brokerId ?? NO_BROKER)) {
+      throw new TradeError('این فروشگاه متعلق به سازمان شما نیست', 403);
+    }
+
+    const name = (dto.name ?? '').trim();
+    if (!name) throw new TradeError('نام محصول الزامی است');
+
+    const product = await this.prisma.storeProduct.create({
+      data: {
+        storeId,
+        name,
+        description: dto.description?.trim() || null,
+        price: dto.price !== undefined ? new Prisma.Decimal(String(dto.price)) : null,
+        unit: dto.unit?.trim() || null,
+        active: dto.active ?? true,
+        sortId: dto.sortId ?? 0,
+      },
+    });
+    return this.productView(product);
+  }
+
+  /** Update an existing product. */
+  async updateProduct(
+    actor: { role: Role; brokerId: string | null },
+    storeId: string,
+    productId: string,
+    dto: { name?: string; description?: string; price?: number; unit?: string; active?: boolean; sortId?: number },
+  ): Promise<StoreProductView> {
+    const store = await this.prisma.store.findUnique({ where: { id: storeId } });
+    if (!store) throw new TradeError('فروشگاه یافت نشد', 404);
+    if (actor.role !== Role.SUPER_ADMIN && store.brokerId !== (actor.brokerId ?? NO_BROKER)) {
+      throw new TradeError('این فروشگاه متعلق به سازمان شما نیست', 403);
+    }
+
+    const existing = await this.prisma.storeProduct.findUnique({ where: { id: productId } });
+    if (!existing || existing.storeId !== storeId) {
+      throw new TradeError('محصول یافت نشد', 404);
+    }
+
+    const data: Prisma.StoreProductUpdateInput = {};
+    if (dto.name !== undefined) {
+      const name = dto.name.trim();
+      if (!name) throw new TradeError('نام محصول الزامی است');
+      data.name = name;
+    }
+    if (dto.description !== undefined) data.description = dto.description?.trim() || null;
+    if (dto.price !== undefined) data.price = new Prisma.Decimal(String(dto.price));
+    if (dto.unit !== undefined) data.unit = dto.unit?.trim() || null;
+    if (dto.active !== undefined) data.active = dto.active;
+    if (dto.sortId !== undefined) data.sortId = dto.sortId;
+
+    const updated = await this.prisma.storeProduct.update({
+      where: { id: productId },
+      data,
+    });
+    return this.productView(updated);
+  }
+
+  /** Delete a product. */
+  async deleteProduct(
+    actor: { role: Role; brokerId: string | null },
+    storeId: string,
+    productId: string,
+  ): Promise<{ ok: boolean }> {
+    const store = await this.prisma.store.findUnique({ where: { id: storeId } });
+    if (!store) throw new TradeError('فروشگاه یافت نشد', 404);
+    if (actor.role !== Role.SUPER_ADMIN && store.brokerId !== (actor.brokerId ?? NO_BROKER)) {
+      throw new TradeError('این فروشگاه متعلق به سازمان شما نیست', 403);
+    }
+
+    const existing = await this.prisma.storeProduct.findUnique({ where: { id: productId } });
+    if (!existing || existing.storeId !== storeId) {
+      throw new TradeError('محصول یافت نشد', 404);
+    }
+
+    await this.prisma.storeProduct.delete({ where: { id: productId } });
+    return { ok: true };
   }
 
   /**
@@ -176,6 +383,7 @@ export class StoresService {
 
   private storeView(s: {
     id: string; name: string; address: string | null; active: boolean;
+    description?: string | null; phone?: string | null; logoPath?: string | null;
     holdings: Array<{ symbol: string; grams: unknown; avgCost: unknown }>;
     createdAt: Date;
   }): StoreView {
@@ -184,6 +392,9 @@ export class StoresService {
       name: s.name,
       address: s.address,
       active: s.active,
+      description: s.description ?? null,
+      phone: s.phone ?? null,
+      logoPath: s.logoPath ?? null,
       holdings: s.holdings.map(h => ({
         symbol: h.symbol,
         grams: roundGrams(dec(h.grams)),
@@ -193,5 +404,19 @@ export class StoresService {
       createdAt: s.createdAt,
     };
   }
-}
 
+  private productView(p: {
+    id: string; name: string; description: string | null;
+    price: unknown; unit: string | null; active: boolean; sortId: number;
+  }): StoreProductView {
+    return {
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      price: p.price !== null && p.price !== undefined ? dec(p.price) : null,
+      unit: p.unit,
+      active: p.active,
+      sortId: p.sortId,
+    };
+  }
+}

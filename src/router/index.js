@@ -17,8 +17,10 @@ import ManagerDeskView from '../views/ManagerDeskView.vue'
 import ForbiddenView from '../views/ForbiddenView.vue'
 import { STAFF_ROLES, ADMIN_ROLES, ROLES } from '../utils/roles'
 
+import StoreView from '../views/StoreView.vue'
 const CustomersView = () => import('../views/CustomersView.vue')
 const JoinView = () => import('../views/JoinView.vue')
+const StoreSetupView = () => import('../views/StoreSetupView.vue')
 
 /**
  * Live gold/silver trading app. Home is the price board (خرید/فروش quotes),
@@ -68,6 +70,10 @@ const routes = [
   { path: '/users', name: 'users', component: UsersView, meta: { title: 'کاربران', requiresAuth: true, roles: [ROLES.SUPER_ADMIN] } },
   // Shown when an authenticated user lacks the role for a route.
   { path: '/forbidden', name: 'forbidden', component: ForbiddenView, meta: { title: 'دسترسی ندارید', requiresAuth: true } },
+  // Customer store view — no auth required.
+  { path: '/store', name: 'store', component: StoreView, meta: { title: 'فروشگاه' } },
+  // Broker manager store setup.
+  { path: '/store-setup', name: 'store-setup', component: StoreSetupView, meta: { title: 'تنظیمات فروشگاه', requiresAuth: true, roles: STAFF_ROLES } },
   // Unknown path → the board, never a blank screen.
   { path: '/:pathMatch(.*)*', redirect: '/' }
 ]

@@ -123,17 +123,38 @@ model Broker {
 
 /// A physical/manual gold shop that posts real-world gold into the platform.
 model Store {
-  id        String   @id @default(uuid())
-  brokerId  String
-  broker    Broker   @relation(fields: [brokerId], references: [id], onDelete: Cascade)
-  name      String
-  address   String?
-  active    Boolean  @default(true)
+  id          String   @id @default(uuid())
+  brokerId    String
+  broker      Broker   @relation(fields: [brokerId], references: [id], onDelete: Cascade)
+  name        String
+  address     String?
+  active      Boolean  @default(true)
+  description String?
+  phone       String?
+  logoPath    String?
   /// Grams of each symbol physically held in the store vault.
-  holdings  StoreHolding[]
-  movements StoreMovement[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
+  holdings    StoreHolding[]
+  movements   StoreMovement[]
+  products    StoreProduct[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+}
+
+/// A product or service offered by a broker's store, visible to customers.
+model StoreProduct {
+  id          String   @id @default(uuid())
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  price       Decimal?
+  unit        String?
+  active      Boolean  @default(true)
+  sortId      Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([storeId])
 }
 
 model Session {

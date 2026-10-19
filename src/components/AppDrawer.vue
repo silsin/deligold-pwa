@@ -61,6 +61,11 @@
             <i class="material-icons">qr_code_scanner</i> پیوستن به کارگزاری
           </button>
 
+          <!-- A customer who joined a broker can browse its shopfront. -->
+          <button v-if="auth.isLoggedIn && auth.user?.brokerId && !auth.isStaff" type="button" class="drawer__item" @click="go('/store')">
+            <i class="material-icons">storefront</i> فروشگاه
+          </button>
+
           <button type="button" class="drawer__item" @click="go('/settings')">
             <i class="material-icons">settings</i> تنظیمات
           </button>
@@ -85,6 +90,9 @@
             </button>
             <button v-if="auth.canViewStores" type="button" class="drawer__item" @click="go('/stores')">
               <i class="material-icons">storefront</i> فروشگاه‌ها
+            </button>
+            <button v-if="auth.isBrokerManager || auth.isBrokerAdmin || auth.isSuperAdmin" type="button" class="drawer__item" @click="go('/store-setup')">
+              <i class="material-icons">store</i> تنظیمات فروشگاه
             </button>
             <button v-if="auth.canViewReports" type="button" class="drawer__item" @click="go('/reports')">
               <i class="material-icons">assessment</i> گزارش‌ها
