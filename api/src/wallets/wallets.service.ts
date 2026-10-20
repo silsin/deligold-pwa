@@ -66,23 +66,35 @@ export class WalletsService {
     }
 
     const wallet = await this.ensureWallet(userId);
-    const count = await this.prisma.deposit.count();
-    const ref = `DEP-${String(count + 1).padStart(6, '0')}`;
 
-    const row = await this.prisma.deposit.create({
-      data: {
-        ref,
-        walletId: wallet.id,
-        amount: new Prisma.Decimal(String(amount)),
-        method: (input.method ?? 'BANK_TRANSFER').trim(),
-        reference: input.reference?.trim() || null,
-        note: input.note?.trim() || null,
-        status: 'PENDING',
-      },
-    });
+    // Generate a collision-safe ref: if DEP-000N is already taken (can happen
+    // when two requests race or rows were deleted), increment and retry.
+    let row: Awaited<ReturnType<typeof this.prisma.deposit.create>> | null = null;
+    let attempt = await this.prisma.deposit.count();
+    while (!row) {
+      attempt += 1;
+      const ref = `DEP-${String(attempt).padStart(6, '0')}`;
+      try {
+        row = await this.prisma.deposit.create({
+          data: {
+            ref,
+            walletId: wallet.id,
+            amount: new Prisma.Decimal(String(amount)),
+            method: (input.method ?? 'BANK_TRANSFER').trim(),
+            reference: input.reference?.trim() || null,
+            note: input.note?.trim() || null,
+            status: 'PENDING',
+          },
+        });
+      } catch (e: unknown) {
+        // P2002 = unique constraint violation — ref collision, try next number
+        if ((e as { code?: string })?.code !== 'P2002') throw e;
+        if (attempt > 999999) throw new TradeError('شماره مرجع واریز در دسترس نیست', 500);
+      }
+    }
 
     const depUser = await this.prisma.user.findUnique({ where: { id: userId }, select: { brokerId: true } });
-    this.push.notify({ type: 'NEW_DEPOSIT', userId, brokerId: depUser?.brokerId ?? '', ref, amount });
+    this.push.notify({ type: 'NEW_DEPOSIT', userId, brokerId: depUser?.brokerId ?? '', ref: row.ref, amount });
 
     return this.depositView(row);
   }
@@ -208,39 +220,45 @@ export class WalletsService {
     const net = money(gross - fee);
     const wallet = await this.ensureWallet(userId);
 
-    const count = await this.prisma.withdrawal.count();
-    const ref = `WDR-${String(count + 1).padStart(6, '0')}`;
-
-    const row = await this.prisma.$transaction(async tx => {
-      // Decrement and check inside the transaction, so two concurrent requests
-      // cannot both pass an outer balance check and overdraw the wallet.
-      const fresh = await tx.wallet.update({
-        where: { id: wallet.id },
-        data: { balance: { decrement: gross } },
-      });
-      if (dec(fresh.balance) < 0) {
-        throw new TradeError('موجودی کیف پول کافی نیست');
+    // Collision-safe ref with retry loop (same pattern as deposits)
+    let row: Awaited<ReturnType<typeof this.prisma.withdrawal.create>> | null = null;
+    let attempt = await this.prisma.withdrawal.count();
+    while (!row) {
+      attempt += 1;
+      const ref = `WDR-${String(attempt).padStart(6, '0')}`;
+      try {
+        row = await this.prisma.$transaction(async tx => {
+          const fresh = await tx.wallet.update({
+            where: { id: wallet.id },
+            data: { balance: { decrement: gross } },
+          });
+          if (dec(fresh.balance) < 0) {
+            throw new TradeError('موجودی کیف پول کافی نیست');
+          }
+          return tx.withdrawal.create({
+            data: {
+              ref,
+              walletId: wallet.id,
+              amount: new Prisma.Decimal(String(net)),
+              fee: new Prisma.Decimal(String(fee)),
+              destination,
+              note: input.note?.trim() || null,
+              status: 'PENDING',
+            },
+          });
+        });
+      } catch (e: unknown) {
+        if ((e as { code?: string })?.code !== 'P2002') throw e;
+        if (attempt > 999999) throw new TradeError('شماره مرجع برداشت در دسترس نیست', 500);
       }
-
-      return tx.withdrawal.create({
-        data: {
-          ref,
-          walletId: wallet.id,
-          amount: new Prisma.Decimal(String(net)),
-          fee: new Prisma.Decimal(String(fee)),
-          destination,
-          note: input.note?.trim() || null,
-          status: 'PENDING',
-        },
-      });
-    });
+    }
 
     const owed = await this.accounts.find(ACCOUNTS.CUSTOMER_CASH_PAYABLE);
     const pending = await this.accounts.find(ACCOUNTS.WITHDRAWAL_PAYABLE);
     await this.ledger.post({
       kind: 'WITHDRAWAL',
       walletId: wallet.id,
-      memo: `برداشت ${ref}`,
+      memo: `برداشت ${row.ref}`,
       lines: [
         { accountId: owed.id, debit: gross },
         { accountId: pending.id, credit: net },
@@ -248,7 +266,7 @@ export class WalletsService {
     });
 
     const wdrUser = await this.prisma.user.findUnique({ where: { id: userId }, select: { brokerId: true } });
-    this.push.notify({ type: 'NEW_WITHDRAWAL', userId, brokerId: wdrUser?.brokerId ?? '', ref, amount: gross });
+    this.push.notify({ type: 'NEW_WITHDRAWAL', userId, brokerId: wdrUser?.brokerId ?? '', ref: row.ref, amount: gross });
 
     return this.withdrawalView(row);
   }

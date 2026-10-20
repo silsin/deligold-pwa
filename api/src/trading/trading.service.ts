@@ -702,8 +702,16 @@ export class TradingService {
    * database sequence so two simultaneous orders cannot mint the same number.
    */
   private async nextOrderRef(): Promise<string> {
-    const count = await this.prisma.order.count();
-    return `DLY-${String(count + 1).padStart(6, '0')}`;
+    // Collision-safe: if DLY-000N is already taken (deleted rows or races),
+    // increment until we find a free slot.
+    let attempt = await this.prisma.order.count();
+    while (true) {
+      attempt += 1;
+      const ref = `DLY-${String(attempt).padStart(6, '0')}`;
+      const existing = await this.prisma.order.findUnique({ where: { ref }, select: { ref: true } });
+      if (!existing) return ref;
+      if (attempt > 999999) throw new TradeError('شماره مرجع سفارش در دسترس نیست', 500);
+    }
   }
 
   /**
