@@ -21,6 +21,8 @@ export const useMarketStore = defineStore('market', () => {
    */
   const buys = ref({})
   const sells = ref({})
+  /** Sides the customer's broker has closed: closed[sym] = { BUY, SELL } booleans. */
+  const closed = ref({})
   const source = ref('')
   const sourceTitle = ref('')
   const updatedAt = ref(0)
@@ -149,11 +151,17 @@ export const useMarketStore = defineStore('market', () => {
       const nextPrices = {};
       const nextBuys = {};
       const nextSells = {};
+      const nextClosed = {};
       for (const [key, q] of Object.entries(quotes)) {
         if (!q || typeof q.price !== 'number') continue;
         nextPrices[key] = q.price;
-        if (typeof q.buy === 'number') nextBuys[key] = q.buy;
-        if (typeof q.sell === 'number') nextSells[key] = q.sell;
+        // API quotes are from the SHOP's side (`buy` = what the shop buys at),
+        // while buys/sells here are the CUSTOMER's sides — so they cross over.
+        // The API fills orders from the same fields, so what the board shows is
+        // what an order executes at.
+        if (typeof q.sell === 'number') nextBuys[key] = q.sell;
+        if (typeof q.buy === 'number') nextSells[key] = q.buy;
+        nextClosed[key] = { BUY: q.canBuy === false, SELL: q.canSell === false };
       }
       trackDirection(nextPrices);
       
@@ -182,6 +190,7 @@ export const useMarketStore = defineStore('market', () => {
       for (const [key, val] of Object.entries(nextSells)) {
         if (sells.value[key] !== val) sells.value[key] = val;
       }
+      closed.value = nextClosed;
       source.value = data.source ?? '';
       sourceTitle.value = data.sourceTitle ?? data.source ?? '';
       updatedAt.value = data.updatedAt ?? Date.now();
@@ -272,7 +281,7 @@ export const useMarketStore = defineStore('market', () => {
   }
 
   return {
-    symbols, prices, buys, sells, source, sourceTitle, updatedAt, stale, note, ranges,
+    symbols, prices, buys, sells, closed, source, sourceTitle, updatedAt, stale, note, ranges,
     candles, ticks, symbol, range, loading, error, polling, direction,
     stats, stat, price, meta, rangeOpen, isRangeFallback,
     rangeHigh, rangeLow, change, changePercent, isUp,

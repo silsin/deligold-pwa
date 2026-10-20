@@ -38,6 +38,10 @@ export interface Quote {
   sell: number | null;
   /** True when a broker manager set this price manually (overrides the feed). */
   manual?: boolean;
+  /** False when the customer's broker has closed customer buying of this symbol. */
+  canBuy?: boolean;
+  /** False when the customer's broker has closed customer selling of this symbol. */
+  canSell?: boolean;
 }
 
 export interface Board {
@@ -187,10 +191,14 @@ export class MarketService implements OnModuleInit, OnModuleDestroy {
    * one-way and avoids a constructor cycle.
    */
   async boardForBroker(brokerId: string): Promise<Board> {
-    // Use the cached board directly — avoids waiting for an in-flight Akbari
-    // fetch which can take 8+ s. The cache is at most 60 s old, which is fine
-    // for broker margin calculations. If no cache exists yet, do a full fetch.
-    const board = this.cache ?? await this.board();
+    // Serve the cached board rather than wait on a slow upstream (8+ s), but
+    // kick a refresh when it has gone stale: every signed-in customer reads
+    // this route, so without the kick nothing but the 5-minute poll would
+    // ever refresh their prices.
+    if (this.cache && Date.now() - this.cache.updatedAt >= CACHE_TTL_MS && !this.inflight) {
+      void this.board().catch(() => {});
+    }
+    const board = this.cache ?? (await this.board());
 
     let rules: BrokerPriceRule[];
     try {
@@ -212,20 +220,23 @@ export class MarketService implements OnModuleInit, OnModuleDestroy {
       const buyPct = Number(rule.buyMarginPercent) || 0;
       const sellPct = Number(rule.sellMarginPercent) || 0;
 
-      let buy: number | null = rawPrice + buyToman + Math.round((rawPrice * buyPct) / 100);
-      let sell: number | null = rawPrice - sellToman - Math.round((rawPrice * sellPct) / 100);
+      // The rule's "buy"/"sell" margins are from the CUSTOMER's side (the
+      // manager's form previews them as قیمت خرید/فروش مشتری). Quote fields are
+      // from the SHOP's side, so they cross over: what a customer pays to buy
+      // is what the shop sells at (`sell`), and vice versa. `fillPrice` reads
+      // the same fields, so the number shown is the number an order fills at.
+      const customerBuys = rawPrice + buyToman + Math.round((rawPrice * buyPct) / 100);
+      const customerSells = rawPrice - sellToman - Math.round((rawPrice * sellPct) / 100);
+      const noMargin = buyToman === 0 && sellToman === 0 && buyPct === 0 && sellPct === 0;
 
-      if (!rule.allowBuy) buy = null;
-      if (!rule.allowSell) sell = null;
-
-      // No margin at all and both sides open → no spread; show only the mid (the
-      // client applies its own fee model), matching the public-source behaviour.
-      if (buyToman === 0 && sellToman === 0 && buyPct === 0 && sellPct === 0 && rule.allowBuy && rule.allowSell) {
-        buy = null;
-        sell = null;
-      }
-
-      quotes[rule.symbol] = { ...quote, buy, sell };
+      quotes[rule.symbol] = {
+        ...quote,
+        // No margin at all → no spread; both sides trade at the mid.
+        sell: noMargin ? quote.sell : customerBuys,
+        buy: noMargin ? quote.buy : Math.max(0, customerSells),
+        canBuy: rule.allowBuy,
+        canSell: rule.allowSell,
+      };
     }
 
     return { ...board, quotes };
@@ -245,10 +256,21 @@ export class MarketService implements OnModuleInit, OnModuleDestroy {
    * shops use. When a source carries no spread we synthesise one from the mid,
    * so the platform never fills both sides at the same number.
    */
-  async fillPrice(symbol: string, side: 'BUY' | 'SELL'): Promise<number | null> {
+  async fillPrice(symbol: string, side: 'BUY' | 'SELL', brokerId?: string | null): Promise<number | null> {
     if (!isTradeSymbol(symbol)) return null;
-    const quote = (await this.board()).quotes[symbol];
+    // A broker's customer trades at that broker's numbers — the same board
+    // their app displays — never the raw feed.
+    if (brokerId) await this.board(); // fresh reading first; boardForBroker serves the cache
+    const board = brokerId ? await this.boardForBroker(brokerId) : await this.board();
+    const quote = board.quotes[symbol];
     if (!quote) return null;
+
+    if (side === 'BUY' && quote.canBuy === false) {
+      throw new TradeError('خرید این نماد در حال حاضر توسط کارگزاری بسته است');
+    }
+    if (side === 'SELL' && quote.canSell === false) {
+      throw new TradeError('فروش این نماد در حال حاضر توسط کارگزاری بسته است');
+    }
 
     if (side === 'BUY') return quote.sell ?? quote.price;
     return quote.buy ?? quote.price;

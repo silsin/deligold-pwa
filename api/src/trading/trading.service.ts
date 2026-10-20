@@ -300,10 +300,10 @@ export class TradingService {
           'برای فروش باید هویت شما تأیید شده باشد. از بخش پروفایل مدارک خود را ارسال کنید',
         );
       }
-      return this.createManualOrder(userId, symbol, weight, input.fulfillment, input.deliveryAddress);
+      return this.createManualOrder(userId, symbol, weight, input.fulfillment, input.deliveryAddress, user.brokerId);
     }
 
-    const price = await this.market.fillPrice(symbol, side);
+    const price = await this.market.fillPrice(symbol, side, user.brokerId);
     if (!price) throw new TradeError('قیمت این نماد در دسترس نیست', 503);
 
     return side === 'BUY'
@@ -436,8 +436,9 @@ export class TradingService {
     weight: number,
     fulfillment?: FulfillmentMethod,
     deliveryAddress?: string,
+    brokerId?: string | null,
   ): Promise<OrderView> {
-    const price = await this.market.fillPrice(symbol, 'BUY');
+    const price = await this.market.fillPrice(symbol, 'BUY', brokerId);
     if (!price) throw new TradeError('قیمت این نماد در دسترس نیست', 503);
 
     if (fulfillment === 'DELIVERY' && !deliveryAddress?.trim()) {

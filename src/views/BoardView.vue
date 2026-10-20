@@ -54,27 +54,41 @@
       <div class="board__rows">
         <template v-for="s in visibleRows" :key="s.symbol">
           <div v-if="auth.isLoggedIn && auth.isCustomer" class="row" :class="{ 'is-selected': market.symbol === s.symbol }">
-            <button type="button" class="row__card row__card--buy" :class="dirClass(s.symbol)" @click="quickOrder(s.symbol, 'BUY')">
-              <i v-if="market.direction[s.symbol]" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
-              <span class="row__price">{{ faMoney(market.prices[s.symbol]) }}</span>
+            <!-- The broker's prices (pricing-rule margins), not the raw mid: the
+              same numbers the API fills an order at. -->
+            <button
+              type="button"
+              class="row__card row__card--buy"
+              :class="[dirClass(s.symbol), { 'is-closed': isClosed(s.symbol, 'BUY') }]"
+              :disabled="isClosed(s.symbol, 'BUY')"
+              @click="quickOrder(s.symbol, 'BUY')"
+            >
+              <i v-if="market.direction[s.symbol] && !isClosed(s.symbol, 'BUY')" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
+              <span class="row__price">{{ isClosed(s.symbol, 'BUY') ? 'بسته' : faMoney(buyPrice(s.symbol)) }}</span>
             </button>
-            <button type="button" class="row__name" @click="quickOrder(s.symbol, 'BUY')">
+            <button type="button" class="row__name" @click="quickOrder(s.symbol, isClosed(s.symbol, 'BUY') ? 'SELL' : 'BUY')">
               <span class="row__label">{{ s.name }}</span>
             </button>
-            <button type="button" class="row__card row__card--sell" :class="dirClass(s.symbol)" @click="quickOrder(s.symbol, 'SELL')">
-              <i v-if="market.direction[s.symbol]" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
-              <span class="row__price">{{ faMoney(market.prices[s.symbol]) }}</span>
+            <button
+              type="button"
+              class="row__card row__card--sell"
+              :class="[dirClass(s.symbol), { 'is-closed': isClosed(s.symbol, 'SELL') }]"
+              :disabled="isClosed(s.symbol, 'SELL')"
+              @click="quickOrder(s.symbol, 'SELL')"
+            >
+              <i v-if="market.direction[s.symbol] && !isClosed(s.symbol, 'SELL')" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
+              <span class="row__price">{{ isClosed(s.symbol, 'SELL') ? 'بسته' : faMoney(sellPrice(s.symbol)) }}</span>
             </button>
           </div>
           <div v-else class="row" :class="{ 'is-selected': market.symbol === s.symbol }">
             <div class="row__card row__card--buy" :class="dirClass(s.symbol)">
               <i v-if="market.direction[s.symbol]" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
-              <span class="row__price">{{ faMoney(market.prices[s.symbol]) }}</span>
+              <span class="row__price">{{ faMoney(buyPrice(s.symbol)) }}</span>
             </div>
             <span class="row__name"><span class="row__label">{{ s.name }}</span></span>
             <div class="row__card row__card--sell" :class="dirClass(s.symbol)">
               <i v-if="market.direction[s.symbol]" class="row__trend material-icons">{{ market.direction[s.symbol] > 0 ? 'arrow_drop_up' : 'arrow_drop_down' }}</i>
-              <span class="row__price">{{ faMoney(market.prices[s.symbol]) }}</span>
+              <span class="row__price">{{ faMoney(sellPrice(s.symbol)) }}</span>
             </div>
           </div>
         </template>
@@ -160,7 +174,7 @@
   />
 </template>
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMarketStore } from '../stores/market'
 import { useAuthStore } from '../stores/auth'
@@ -200,9 +214,9 @@ const quickSymbol = ref('')
 const quickSide = ref('BUY')
 
 /**
- * Buy/sell prices — only shown when the broker manager has explicitly set a
- * spread via the board price override. If no spread exists, both return the
- * mid price so the tile shows one number, not three.
+ * The customer's buy/sell prices — the broker's pricing-rule margins (or a
+ * manual override) applied to the live price. With no spread both fall back
+ * to the mid, so the tile shows one number.
  */
 function buyPrice(symbol) {
   const q = market.buys[symbol]
@@ -212,6 +226,11 @@ function buyPrice(symbol) {
 function sellPrice(symbol) {
   const q = market.sells[symbol]
   return q ?? market.prices[symbol] ?? 0
+}
+
+/** True when the customer's broker has closed this side of the symbol. */
+function isClosed(symbol, side) {
+  return !!market.closed[symbol]?.[side]
 }
 
 function dirClass(symbol) {
@@ -301,6 +320,16 @@ async function retryFetch() {
   await market.fetchMarket({ withChart: false, record: true })
   await market.fetchStats()
 }
+
+// The board is broker-scoped: when the signed-in customer's broker changes —
+// login, logout, joining a broker — refetch now rather than showing the
+// previous board's prices until the next 15-second poll.
+watch(
+  () => auth.user?.brokerId ?? null,
+  (next, prev) => {
+    if (next !== prev) void market.fetchMarket({ withChart: false, background: true })
+  }
+)
 
 onMounted(async () => {
   void market.fetchMarket({ withChart: false, record: true })
@@ -490,6 +519,12 @@ onBeforeUnmount(() => {
 }
 
 /* ── Rows: three separate floating tiles, each with its own colored glow ── */
+.row__card.is-closed {
+  opacity: 0.45;
+  filter: grayscale(1);
+  cursor: not-allowed;
+}
+
 .row__card {
   position: relative;
   display: flex;
