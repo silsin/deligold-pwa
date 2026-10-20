@@ -265,9 +265,10 @@ async function handleDepositSubmit(payload) {
       depositBusy.value = false
       return
     }
+    // Always close the deposit modal after a successful submission.
+    showDeposit.value = false
     await auth.fetchWallet()
     if (auth.balance >= (pendingOrder.value?.netTotal ?? 0)) {
-      showDeposit.value = false
       showCheckout.value = true
     } else {
       error.value = 'درخواست واریز ثبت شد اما هنوز تأیید نشده است. پس از تأیید کارشناس، می‌توانید سفارش را ادامه دهید.'
