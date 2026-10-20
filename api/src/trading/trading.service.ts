@@ -5,6 +5,7 @@ import { AccountsService, ACCOUNTS } from '../accounting/accounts.service';
 import { LedgerService } from '../accounting/ledger.service';
 import { MarketService } from '../market/market.service';
 import { PermissionsService } from '../permissions/permissions.service';
+import { PushService } from '../push/push.service';
 import { isTradeSymbol, symbolMeta } from '../market/symbols';
 import { InsufficientFundsError, TradeError } from '../common/errors';
 import { EPSILON, dec, feeFor, grams as roundGrams, money, weightedAvgCost } from '../common/money';
@@ -116,6 +117,7 @@ export class TradingService {
     private readonly accounts: AccountsService,
     private readonly ledger: LedgerService,
     private readonly permissions: PermissionsService,
+    private readonly push: PushService,
   ) {}
 
   // ── Reads ─────────────────────────────────────────────────────────────────
@@ -307,15 +309,15 @@ export class TradingService {
     if (!price) throw new TradeError('قیمت این نماد در دسترس نیست', 503);
 
     return side === 'BUY'
-      ? this.settleBuy(userId, symbol, weight, price)
-      : this.settleSell(userId, symbol, weight, price);
+      ? this.settleBuy(userId, symbol, weight, price, user.brokerId)
+      : this.settleSell(userId, symbol, weight, price, user.brokerId);
   }
 
   /**
    * Buys from the cash wallet, inside one transaction so the balance and the
    * position can never disagree.
    */
-  private async settleBuy(userId: string, symbol: string, weight: number, price: number): Promise<OrderView> {
+  private async settleBuy(userId: string, symbol: string, weight: number, price: number, brokerId?: string | null): Promise<OrderView> {
     const amount = money(weight * price);
     const fee = feeFor(amount, TRADE_FEE_PERCENT);
     const need = money(amount + fee);
@@ -362,11 +364,12 @@ export class TradingService {
     });
 
     await this.postTrade(userId, w.id, order, weight, amount, fee);
+    this.push.notify({ type: 'NEW_ORDER', userId, brokerId: brokerId ?? '', ref: order.ref, symbol: order.symbol, grams: weight });
     return toOrderView(order);
   }
 
   /** Sells from an existing holding, crediting cash net of commission. */
-  private async settleSell(userId: string, symbol: string, weight: number, price: number): Promise<OrderView> {
+  private async settleSell(userId: string, symbol: string, weight: number, price: number, brokerId?: string | null): Promise<OrderView> {
     const w = await this.ensureWallet(userId);
     const pos = await this.prisma.position.findUnique({
       where: { walletId_symbol: { walletId: w.id, symbol } },
@@ -414,6 +417,7 @@ export class TradingService {
     });
 
     await this.postTrade(userId, w.id, order, weight, amount, fee);
+    this.push.notify({ type: 'NEW_ORDER', userId, brokerId: brokerId ?? '', ref: order.ref, symbol: order.symbol, grams: weight });
     return toOrderView(order);
   }
 
@@ -461,6 +465,7 @@ export class TradingService {
       },
     });
 
+    this.push.notify({ type: 'NEW_ORDER', userId, brokerId: brokerId ?? '', ref: order.ref, symbol: order.symbol, grams: weight });
     return toOrderView(order);
   }
 
@@ -518,6 +523,10 @@ export class TradingService {
         status: 'PENDING_REVIEW',
       },
     });
+
+    // Notify broker managers a receipt is ready for review
+    const orderUser = await this.prisma.user.findUnique({ where: { id: userId }, select: { brokerId: true } });
+    this.push.notify({ type: 'ORDER_STATUS', userId, brokerId: orderUser?.brokerId ?? '', ref: updated.ref, status: 'PENDING_REVIEW' });
 
     return toOrderView(updated);
   }
@@ -581,6 +590,7 @@ export class TradingService {
           reviewNote: decision.note!.trim(),
         },
       });
+      this.push.notify({ type: 'ORDER_STATUS', userId: order.userId, brokerId: order.user?.brokerId ?? '', ref: rejected.ref, status: 'REJECTED' });
       return toOrderView(rejected);
     }
 
@@ -618,6 +628,7 @@ export class TradingService {
       });
     });
 
+    this.push.notify({ type: 'ORDER_STATUS', userId: order.userId, brokerId: order.user?.brokerId ?? '', ref: approved.ref, status: 'APPROVED' });
     return toOrderView(approved);
   }
 
@@ -645,6 +656,7 @@ export class TradingService {
       where: { id: orderId },
       data: { status: 'FULFILLED' },
     });
+    this.push.notify({ type: 'ORDER_STATUS', userId: order.userId, brokerId: order.user?.brokerId ?? '', ref: updated.ref, status: 'FULFILLED' });
     return toOrderView(updated);
   }
 

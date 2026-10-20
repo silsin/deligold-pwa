@@ -4,6 +4,7 @@ import { Role, type User } from '@prisma/client';
 import { createHash, randomBytes } from 'node:crypto';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushService } from '../push/push.service';
 import { TradeError } from '../common/errors';
 import { assignableRoles } from './roles';
 import type { AuthUser } from './current-user.decorator';
@@ -77,6 +78,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
+    private readonly push: PushService,
   ) {}
 
   /**
@@ -162,6 +164,9 @@ export class AuthService {
     });
 
     this.logger.log(`registered ${requested} ${user.id} (${phone})`);
+    if (!actor && brokerId && requested === Role.CUSTOMER) {
+      this.push.notify({ type: 'NEW_CUSTOMER', userId: user.id, brokerId, customerName: user.name });
+    }
     return this.issue(user);
   }
 

@@ -88,6 +88,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink, RouterView } from 'vue-router'
 import { useMarketStore } from './stores/market'
 import { useAuthStore } from './stores/auth'
+import { usePushStore } from './stores/push'
 import AppDrawer from './components/AppDrawer.vue'
 import LoginSheet from './components/LoginSheet.vue'
 import TermsModal from './components/TermsModal.vue'
@@ -100,6 +101,7 @@ import { api } from './utils/api.js'
 
 const market = useMarketStore()
 const auth = useAuthStore()
+const push = usePushStore()
 const clock = ref('')
 const drawerOpen = ref(false)
 const showTerms = ref(false)
@@ -167,6 +169,7 @@ onMounted(() => {
     void auth.ensureSession()
   }
   if (auth.isLoggedIn) void auth.fetchAccount()
+  if (auth.isLoggedIn) void push.init()
 })
 
 onBeforeUnmount(() => {

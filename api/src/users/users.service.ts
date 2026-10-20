@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Role, type User } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushService } from '../push/push.service';
 import { TradeError } from '../common/errors';
 import { RANK, assignableRoles } from '../auth/roles';
 import { toPublicUser, type PublicUser } from '../auth/auth.service';
@@ -17,7 +18,10 @@ import * as bcrypt from 'bcryptjs';
  */
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly push: PushService,
+  ) {}
 
   // ── Own profile ───────────────────────────────────────────────────────────
 
@@ -118,6 +122,7 @@ export class UsersService {
         ? { verifiedAt: new Date(), verifiedById: actor.userId, verifyNote: null }
         : { verifiedAt: null, verifiedById: null, verifyNote: decision.note?.trim() || null },
     });
+    this.push.notify({ type: 'IDENTITY_DECISION', userId: targetId, verified: decision.verified });
     return toPublicUser(updated);
   }
 
@@ -288,6 +293,9 @@ export class UsersService {
     }
 
     const updated = await this.prisma.user.update({ where: { id: targetId }, data: { status } });
+    if (status === 'SUSPENDED') {
+      this.push.notify({ type: 'ACCOUNT_SUSPENDED', userId: targetId });
+    }
     return toPublicUser(updated);
   }
 

@@ -11,6 +11,9 @@ export default defineConfig({
   plugins: [
     vue(),
     VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.js',
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       includeAssets: ['favicon.ico'],
@@ -30,24 +33,6 @@ export default defineConfig({
           { src: 'icons/icon-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
           { src: 'icons/icon-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
           { src: 'icons/icon-maskable-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
-        ]
-      },
-      workbox: {
-        skipWaiting: true,
-        clientsClaim: true,
-        globPatterns: ['**/*.{js,css,ico,png,svg,woff2}'],
-        // Market data must never be served stale from the cache.
-        navigateFallbackDenylist: [/^\/(auth|users|invites|trade|wallet|market|reports|stores|uploads)\//],
-        runtimeCaching: [
-          {
-            urlPattern: /\/market\/board/,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'trade-market',
-              networkTimeoutSeconds: 8,
-              expiration: { maxEntries: 20, maxAgeSeconds: 300 }
-            }
-          }
         ]
       },
       devOptions: { enabled: false }
@@ -70,6 +55,7 @@ export default defineConfig({
       '/reports': { target: DG_API_TARGET, changeOrigin: true },
       '/stores': { target: DG_API_TARGET, changeOrigin: true },
       '/uploads': { target: DG_API_TARGET, changeOrigin: true },
+      '/push': { target: DG_API_TARGET, changeOrigin: true },
     }
   },
   build: { outDir: 'dist', sourcemap: false, chunkSizeWarningLimit: 900 }

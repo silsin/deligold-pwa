@@ -23,7 +23,7 @@ dev-9741.txt
 port-build.txt
 err.txt
 *.bak
-
+/.agents
 # ── API data (must never be committed; the SQLite file and uploaded
 # bank receipts are live production data) ──────────────────────────────────────
 *.db

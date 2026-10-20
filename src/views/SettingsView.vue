@@ -71,6 +71,25 @@
     </section>
 
 
+    <section class="block" v-if="push.supported && auth.isLoggedIn">
+      <h2 class="section-title">اعلان‌های پوش</h2>
+      <label class="switch">
+        <input
+          type="checkbox"
+          :checked="push.subscribed"
+          :disabled="push.loading || push.permission === 'denied'"
+          @change="togglePush"
+        />
+        <span class="switch__track"><span class="switch__knob"></span></span>
+        <span class="switch__text">
+          دریافت اعلان‌های پوش
+          <small v-if="push.permission === 'denied'">دسترسی رد شده — از تنظیمات مرورگر فعال کنید</small>
+        </span>
+      </label>
+      <p v-if="push.error" class="warn">{{ push.error }}</p>
+      <p class="hint">برای دریافت اعلان‌های سفارش، پرداخت و رویدادهای حساب این گزینه را فعال کنید.</p>
+    </section>
+
     <section class="block">
       <h2 class="section-title">درباره</h2>
       <dl class="about">
@@ -90,6 +109,7 @@ import { onMounted, ref, watch } from 'vue'
 import { THEME_PALETTES, applyPalette, loadPaletteId, savePaletteId } from '../theme'
 import { useMarketStore } from '../stores/market'
 import { useAuthStore } from '../stores/auth'
+import { usePushStore } from '../stores/push'
 import { loadFeatured, loadVisible, saveFeatured, saveVisible } from '../utils/boardPrefs'
 import { faAgo, faPercent } from '../utils/format'
 
@@ -113,6 +133,7 @@ function saveTickerPref() {
 
 const market = useMarketStore()
 const auth = useAuthStore()
+const push = usePushStore()
 
 const palettes = THEME_PALETTES
 const active = ref(loadPaletteId())
@@ -188,8 +209,17 @@ async function refresh() {
   await market.fetchMarket({ record: true })
 }
 
+async function togglePush() {
+  if (push.subscribed) {
+    await push.unsubscribe()
+  } else {
+    await push.subscribe()
+  }
+}
+
 onMounted(() => {
   applyPalette(active.value)
+  push.init()
 })
 </script>
 

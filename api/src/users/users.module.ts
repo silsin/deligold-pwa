@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AuthModule } from '../auth/auth.module';
 import { PermissionsModule } from '../permissions/permissions.module';
+import { PushModule } from '../push/push.module';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 
@@ -15,7 +16,7 @@ import { UsersService } from './users.service';
  * Imports PermissionsModule for customer trade permission management.
  */
 @Module({
-  imports: [PrismaModule, AuthModule, PermissionsModule],
+  imports: [PrismaModule, AuthModule, PermissionsModule, PushModule],
   controllers: [UsersController],
   providers: [UsersService],
   exports: [UsersService],

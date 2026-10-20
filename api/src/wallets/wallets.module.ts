@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AccountingModule } from '../accounting/accounting.module';
+import { PushModule } from '../push/push.module';
 import { WalletsController } from './wallets.controller';
 import { WalletsService } from './wallets.service';
 
@@ -9,7 +10,7 @@ import { WalletsService } from './wallets.service';
  * books reconcile against wallet balances rather than drifting from them.
  */
 @Module({
-  imports: [PrismaModule, AccountingModule],
+  imports: [PrismaModule, AccountingModule, PushModule],
   controllers: [WalletsController],
   providers: [WalletsService],
   exports: [WalletsService],

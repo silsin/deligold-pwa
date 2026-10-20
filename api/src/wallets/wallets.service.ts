@@ -3,6 +3,7 @@ import { DepositStatus, Prisma, WithdrawalStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccountsService, ACCOUNTS } from '../accounting/accounts.service';
 import { LedgerService } from '../accounting/ledger.service';
+import { PushService } from '../push/push.service';
 import { TradeError } from '../common/errors';
 import { dec, money } from '../common/money';
 
@@ -41,6 +42,7 @@ export class WalletsService {
     private readonly prisma: PrismaService,
     private readonly accounts: AccountsService,
     private readonly ledger: LedgerService,
+    private readonly push: PushService,
   ) {}
 
   // ── Deposits ──────────────────────────────────────────────────────────────
@@ -79,6 +81,9 @@ export class WalletsService {
       },
     });
 
+    const depUser = await this.prisma.user.findUnique({ where: { id: userId }, select: { brokerId: true } });
+    this.push.notify({ type: 'NEW_DEPOSIT', userId, brokerId: depUser?.brokerId ?? '', ref, amount });
+
     return this.depositView(row);
   }
 
@@ -92,7 +97,7 @@ export class WalletsService {
   async approveDeposit(actor: { role: string; brokerId: string | null }, depositId: string): Promise<CashMoveView> {
     const deposit = await this.prisma.deposit.findUnique({
       where: { id: depositId },
-      include: { wallet: { include: { user: { select: { brokerId: true } } } } },
+      include: { wallet: { include: { user: { select: { id: true, brokerId: true } } } } },
     });
     if (!deposit) throw new TradeError('واریز یافت نشد', 404);
     if (deposit.status !== 'PENDING') {
@@ -134,6 +139,7 @@ export class WalletsService {
       ],
     });
 
+    this.push.notify({ type: 'DEPOSIT_DECISION', userId: deposit.wallet.user.id, ref: deposit.ref, approved: true });
     return this.depositView(updated);
   }
 
@@ -141,7 +147,7 @@ export class WalletsService {
   async rejectDeposit(actor: { role: string; brokerId: string | null }, depositId: string, note?: string): Promise<CashMoveView> {
     const deposit = await this.prisma.deposit.findUnique({
       where: { id: depositId },
-      include: { wallet: { include: { user: { select: { brokerId: true } } } } },
+      include: { wallet: { include: { user: { select: { id: true, brokerId: true } } } } },
     });
     if (!deposit) throw new TradeError('واریز یافت نشد', 404);
     if (deposit.status !== 'PENDING') {
@@ -162,6 +168,7 @@ export class WalletsService {
       where: { id: depositId },
       data: { status: 'REJECTED', note: note?.trim() || deposit.note },
     });
+    this.push.notify({ type: 'DEPOSIT_DECISION', userId: deposit.wallet.user.id, ref: deposit.ref, approved: false });
     return this.depositView(updated);
   }
 
@@ -240,6 +247,9 @@ export class WalletsService {
       ],
     });
 
+    const wdrUser = await this.prisma.user.findUnique({ where: { id: userId }, select: { brokerId: true } });
+    this.push.notify({ type: 'NEW_WITHDRAWAL', userId, brokerId: wdrUser?.brokerId ?? '', ref, amount: gross });
+
     return this.withdrawalView(row);
   }
 
@@ -247,7 +257,7 @@ export class WalletsService {
   async approveWithdrawal(actor: { role: string; brokerId: string | null }, withdrawalId: string): Promise<CashMoveView> {
     const w = await this.prisma.withdrawal.findUnique({
       where: { id: withdrawalId },
-      include: { wallet: { include: { user: { select: { brokerId: true } } } } },
+      include: { wallet: { include: { user: { select: { id: true, brokerId: true } } } } },
     });
     if (!w) throw new TradeError('برداشت یافت نشد', 404);
     if (w.status !== 'PENDING') {
@@ -282,6 +292,7 @@ export class WalletsService {
       ],
     });
 
+    this.push.notify({ type: 'WITHDRAWAL_DECISION', userId: w.wallet.user.id, ref: w.ref, approved: true });
     return this.withdrawalView(updated);
   }
 
@@ -295,7 +306,7 @@ export class WalletsService {
   async rejectWithdrawal(actor: { role: string; brokerId: string | null }, withdrawalId: string, note?: string): Promise<CashMoveView> {
     const w = await this.prisma.withdrawal.findUnique({
       where: { id: withdrawalId },
-      include: { wallet: { include: { user: { select: { brokerId: true } } } } },
+      include: { wallet: { include: { user: { select: { id: true, brokerId: true } } } } },
     });
     if (!w) throw new TradeError('برداشت یافت نشد', 404);
     if (w.status !== 'PENDING') {
@@ -337,6 +348,7 @@ export class WalletsService {
       ],
     });
 
+    this.push.notify({ type: 'WITHDRAWAL_DECISION', userId: w.wallet.user.id, ref: w.ref, approved: false });
     return this.withdrawalView(updated);
   }
 

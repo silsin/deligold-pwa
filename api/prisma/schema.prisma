@@ -101,6 +101,7 @@ model User {
   roleChanges    RoleChange[]  @relation("RoleChangeTarget")
   grantedChanges RoleChange[]  @relation("RoleChangeGranter")
   sessions       Session[]
+  pushSubscriptions PushSubscription[]
 
   @@index([role])
   @@index([brokerId])
@@ -692,5 +693,24 @@ model RoleChange {
   createdAt DateTime @default(now())
 
   @@index([targetId, createdAt])
+}
+
+// ── Push subscriptions (web-push / VAPID) ───────────────────────────────────
+
+/// One Web Push subscription endpoint per browser/device.
+/// A user may have several (phone + laptop + tablet).
+/// Endpoint uniqueness is enforced so re-subscribing the same browser
+/// just upserts rather than duplicating rows.
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// The browser-issued push endpoint URL (unique per device).
+  endpoint  String   @unique
+  /// JSON object: { p256dh: string; auth: string }
+  keys      String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 

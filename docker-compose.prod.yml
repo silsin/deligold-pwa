@@ -60,6 +60,9 @@ services:
       # SEED_ADMIN_PASSWORD blank to skip the seed and keep the current password.
       SEED_ADMIN_PHONE: ${SEED_ADMIN_PHONE:-}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:?VAPID_PUBLIC_KEY must be set in .env}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:?VAPID_PRIVATE_KEY must be set in .env}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@delly.gold}
     volumes:
       - delly_data:/data
     networks:
