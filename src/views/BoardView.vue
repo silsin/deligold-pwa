@@ -35,8 +35,8 @@
         <span class="board__update-time">{{ faJalaliDateTime(market.updatedAt) }}</span>
       </div>
 
-      <!-- Store button: customers who joined a broker can open its shopfront. -->
-      <div v-if="auth.isLoggedIn && auth.user?.brokerId" class="board__store-wrap">
+      <!-- Store button: only shown when the broker has at least one active product. -->
+      <div v-if="auth.isLoggedIn && auth.user?.brokerId && hasStoreItems" class="board__store-wrap">
         <button type="button" class="board__store-btn" @click="router.push('/store')">
           <i class="material-icons">storefront</i>
           <span>فروشگاه</span>
@@ -178,6 +178,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'v
 import { useRouter } from 'vue-router'
 import { useMarketStore } from '../stores/market'
 import { useAuthStore } from '../stores/auth'
+import { useBrokerStore } from '../stores/brokerStore'
 import TermsModal from '../components/TermsModal.vue'
 import TickerTape from '../components/TickerTape.vue'
 import QuickOrderSheet from './QuickOrderSheet.vue'
@@ -200,12 +201,16 @@ function refreshTickerPref() {
 
 const market = useMarketStore()
 const auth = useAuthStore()
+const brokerStore = useBrokerStore()
 const router = useRouter()
 
 const showTerms = ref(false)
 const refreshing = ref(false)
 const balanceAt = ref(Date.now())
 const showTicker = ref(loadTickerPref())
+
+/** True when the broker has at least one active product in their store. */
+const hasStoreItems = computed(() => brokerStore.products.length > 0)
 
 // Quick order from the board — customer-only. Guests get the login sheet,
 // staff keep read-only tiles and never see this sheet.
@@ -327,7 +332,10 @@ async function retryFetch() {
 watch(
   () => auth.user?.brokerId ?? null,
   (next, prev) => {
-    if (next !== prev) void market.fetchMarket({ withChart: false, background: true })
+    if (next !== prev) {
+      void market.fetchMarket({ withChart: false, background: true })
+      void brokerStore.fetchMyBrokerStore()
+    }
   }
 )
 
@@ -340,6 +348,7 @@ onMounted(async () => {
     // Re-fetch market with brokerId now that user is loaded
     if (auth.user?.brokerId) {
       void market.fetchMarket({ withChart: false, background: true })
+      void brokerStore.fetchMyBrokerStore()
     }
   }
   window.addEventListener('storage', refreshBoardPrefs)
