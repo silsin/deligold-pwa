@@ -179,6 +179,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  overflow-x: hidden;
 }
 
 /* ── Header ──────────────────────────────────────────────────────────────── */
@@ -239,8 +240,8 @@ onMounted(() => {
 }
 
 /* Top row */
-.order-card__top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.order-card__ref { display: flex; align-items: center; gap: 8px; }
+.order-card__top { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.order-card__ref { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .side-badge {
   padding: 3px 10px; border-radius: 999px;
   font-size: 11.5px; font-weight: 900;
@@ -254,7 +255,7 @@ onMounted(() => {
 .status-badge {
   padding: 3px 10px; border-radius: 999px;
   border: 1px solid var(--border); background: var(--surface);
-  font-size: 11px; font-weight: 800; white-space: nowrap;
+  font-size: 11px; font-weight: 800;
 }
 .status-badge.is-ok { background: var(--up-soft); color: var(--up); border-color: var(--up); }
 .status-badge.is-reject { background: var(--down-soft); color: var(--down); border-color: var(--down); }
@@ -271,7 +272,7 @@ onMounted(() => {
 .is-down { color: var(--down); }
 
 /* Footer row */
-.order-card__footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.order-card__footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
 .order-date { font-size: 11.5px; }
 .muted { color: var(--text-muted); }
 .tnum { font-variant-numeric: tabular-nums; }
@@ -284,7 +285,7 @@ onMounted(() => {
   background: color-mix(in srgb, var(--accent) 8%, transparent);
   color: var(--accent);
   font-size: 12.5px; font-weight: 800;
-  white-space: nowrap; cursor: pointer;
+  cursor: pointer;
   transition: background 0.15s;
 }
 .btn-receipt .material-icons { font-size: 16px; }
