@@ -730,30 +730,35 @@ export class TradingService {
     amount: number,
     fee: number,
   ): Promise<void> {
-    const cash = await this.accounts.find(ACCOUNTS.CASH);
-    const gold = await this.accounts.find(ACCOUNTS.GOLD_INVENTORY, { symbol: order.symbol });
     const goldOwed = await this.accounts.find(ACCOUNTS.CUSTOMER_GOLD_PAYABLE);
     const cashOwed = await this.accounts.find(ACCOUNTS.CUSTOMER_CASH_PAYABLE);
     const revenue = await this.accounts.find(ACCOUNTS.TRADING_REVENUE);
 
     if (order.side === 'BUY') {
-      // Customer pays cash, receives gold, and we earn the commission.
+      // Customer's wallet was already debited by (amount + fee) in settleBuy.
+      // Journal: reduce cash liability (DR), credit gold liability (CR) + revenue (CR).
+      // DR CUSTOMER_CASH_PAYABLE  amount + fee
+      // CR CUSTOMER_GOLD_PAYABLE  amount
+      // CR TRADING_REVENUE        fee
       await this.ledger.post({
         kind: 'BUY',
         userId,
         walletId,
         memo: `خرید ${order.symbol}`,
         lines: [
-          { accountId: cashOwed.id, debit: amount, symbol: null },
+          { accountId: cashOwed.id, debit: money(amount + fee), symbol: null },
+          { accountId: goldOwed.id, credit: amount, symbol: order.symbol, grams: weight },
           { accountId: revenue.id, credit: fee, symbol: null },
-          { accountId: gold.id, credit: amount, symbol: order.symbol, grams: weight },
-          { accountId: goldOwed.id, debit: amount, symbol: order.symbol, grams: weight },
         ],
       });
       return;
     }
 
-    // Customer sells gold back, receives cash minus commission.
+    // Customer's gold was already debited and wallet credited by (amount - fee) in settleSell.
+    // Journal: reduce gold liability (DR), credit cash liability (CR) + revenue (CR).
+    // DR CUSTOMER_GOLD_PAYABLE  amount
+    // CR CUSTOMER_CASH_PAYABLE  amount - fee
+    // CR TRADING_REVENUE        fee
     const credit = money(amount - fee);
     await this.ledger.post({
       kind: 'SELL',
@@ -761,11 +766,9 @@ export class TradingService {
       walletId,
       memo: `فروش ${order.symbol}`,
       lines: [
-        { accountId: goldOwed.id, credit: amount, symbol: order.symbol, grams: -weight },
-        { accountId: gold.id, debit: amount, symbol: order.symbol, grams: -weight },
-        { accountId: cash.id, debit: credit, symbol: null },
-        { accountId: revenue.id, credit: fee, symbol: null },
+        { accountId: goldOwed.id, debit: amount, symbol: order.symbol, grams: -weight },
         { accountId: cashOwed.id, credit: credit, symbol: null },
+        { accountId: revenue.id, credit: fee, symbol: null },
       ],
     });
   }
