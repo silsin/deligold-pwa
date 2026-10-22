@@ -67,12 +67,17 @@ export class TradingController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const buffer = await this.receipt.generateOrderReceipt(id, user);
+    // Set headers then send the raw buffer.
+    // passthrough:true keeps AllExceptionsFilter active so TradeError throws
+    // (403/404/400) still reach the filter and return proper JSON error bodies.
+    // res.send() is used explicitly rather than `return buffer` because NestJS
+    // passthrough mode would still JSON-serialize a Buffer as a byte array.
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `attachment; filename="receipt-${id}.pdf"`,
-      'Content-Length': buffer.length,
+      'Content-Length': String(buffer.length),
     });
-    return buffer;
+    res.send(buffer);
   }
 
   /**

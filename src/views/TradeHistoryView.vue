@@ -20,6 +20,10 @@
 
     <div v-if="loading" class="state">در حال بارگذاری…</div>
 
+    <p v-if="downloadError" class="download-err" role="alert">
+      <i class="material-icons">error_outline</i> {{ downloadError }}
+    </p>
+
     <div v-else-if="visible.length === 0" class="state">
       <template v-if="auth.isAuthenticated">
         هنوز معامله‌ای ثبت نشده است.
@@ -112,14 +116,16 @@ function pnlClass(value) {
 }
 
 const downloadBusy = reactive({})
+const downloadError = ref('')
 
 async function downloadReceipt(order) {
   if (downloadBusy[order.id]) return
   downloadBusy[order.id] = true
+  downloadError.value = ''
   try {
     await downloadOrderReceipt(order.id, order.ref)
   } catch (e) {
-    auth.error = e?.message || 'دانلود رسید ناموفق بود'
+    downloadError.value = e?.message || 'دانلود رسید ناموفق بود'
   } finally {
     downloadBusy[order.id] = false
   }
@@ -279,5 +285,18 @@ onMounted(() => {
 .btn-receipt__label { display: none; }
 @media (min-width: 480px) { .btn-receipt__label { display: inline; } }
 .receipt-na { color: var(--text-muted); font-size: 12px; }
+
+.download-err {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  padding: 10px 13px;
+  border-radius: 11px;
+  background: var(--down-soft);
+  color: var(--down);
+  font-size: 12.5px;
+}
+.download-err .material-icons { font-size: 16px; flex-shrink: 0; }
 </style>
 
