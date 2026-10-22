@@ -34,6 +34,7 @@
     <table v-else class="table">
       <thead>
         <tr>
+          <th>رسید</th>
           <th>نماد</th>
           <th>نوع</th>
           <th>مقدار</th>
@@ -43,6 +44,20 @@
       </thead>
       <tbody>
         <tr v-for="o in visible" :key="o.id">
+          <td>
+            <button
+              v-if="['APPROVED','REJECTED','FULFILLED'].includes(o.status)"
+              type="button"
+              class="btn-receipt"
+              :disabled="downloadBusy[o.id]"
+              :title="downloadBusy[o.id] ? 'در حال دانلود…' : 'دانلود رسید'"
+              @click="downloadReceipt(o)"
+            >
+              <i class="material-icons">{{ downloadBusy[o.id] ? 'hourglass_empty' : 'download' }}</i>
+              <span class="btn-receipt__label">دانلود رسید</span>
+            </button>
+            <span v-else class="receipt-na">—</span>
+          </td>
           <td class="sym">{{ o.symbol }}</td>
           <td>
             <span class="badge" :class="o.side === 'BUY' ? 'is-buy' : 'is-sell'">
@@ -66,10 +81,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, reactive } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useAuthStore } from '../stores/auth'
 import { faNumber, faMoney, faWeight, faDelta } from '../utils/format'
+import { downloadOrderReceipt } from '../utils/receipt.js'
 
 const auth = useAuthStore()
 const { orders, loading } = storeToRefs(auth)
@@ -93,6 +109,20 @@ function setFilter(key) {
 function pnlClass(value) {
   if (value === null || value === undefined) return ''
   return Number(value) >= 0 ? 'is-up' : 'is-down'
+}
+
+const downloadBusy = reactive({})
+
+async function downloadReceipt(order) {
+  if (downloadBusy[order.id]) return
+  downloadBusy[order.id] = true
+  try {
+    await downloadOrderReceipt(order.id, order.ref)
+  } catch (e) {
+    auth.error = e?.message || 'دانلود رسید ناموفق بود'
+  } finally {
+    downloadBusy[order.id] = false
+  }
 }
 
 onMounted(() => {
@@ -229,5 +259,25 @@ onMounted(() => {
 .is-down {
   color: var(--down);
 }
+
+.btn-receipt {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-receipt .material-icons { font-size: 15px; }
+.btn-receipt:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn-receipt__label { display: none; }
+@media (min-width: 480px) { .btn-receipt__label { display: inline; } }
+.receipt-na { color: var(--text-muted); font-size: 12px; }
 </style>
 

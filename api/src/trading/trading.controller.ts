@@ -1,8 +1,10 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { Role } from '@prisma/client';
 import { CurrentUser, type AuthUser } from '../auth/current-user.decorator';
 import { Roles } from '../auth/roles.decorator';
 import { TradingService } from './trading.service';
+import { ReceiptService } from './receipt.service';
 import { PlaceOrderDto, ReviewOrderDto, SubmitReceiptDto } from './dto/trade.dto';
 
 /** The staff roles allowed to work the review queue. */
@@ -18,7 +20,10 @@ const STAFF = [Role.BROKER_MANAGER, Role.BROKER_ADMIN, Role.SUPER_ADMIN] as cons
  */
 @Controller('trade')
 export class TradingController {
-  constructor(private readonly trading: TradingService) {}
+  constructor(
+    private readonly trading: TradingService,
+    private readonly receipt: ReceiptService,
+  ) {}
 
   // ── Customer ──────────────────────────────────────────────────────────────
 
@@ -44,6 +49,26 @@ export class TradingController {
   @Get('orders/:id')
   order(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.trading.order(user.userId, id);
+  }
+
+  /**
+   * Downloads a PDF receipt for a single order.
+   * Auth: customer sees only own order; staff sees broker-scoped; SUPER_ADMIN sees all.
+   * Status: APPROVED, REJECTED, or FULFILLED only — others return 400.
+   */
+  @Get('orders/:id/receipt.pdf')
+  async downloadReceipt(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.receipt.generateOrderReceipt(id, user);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="receipt-${id}.pdf"`,
+      'Content-Length': buffer.length,
+    });
+    res.send(buffer);
   }
 
   /**

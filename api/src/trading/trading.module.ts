@@ -6,6 +6,7 @@ import { PermissionsModule } from '../permissions/permissions.module';
 import { PushModule } from '../push/push.module';
 import { TradingController } from './trading.controller';
 import { TradingService } from './trading.service';
+import { ReceiptService } from './receipt.service';
 
 /**
  * Trading: order placement, the wallet/position reads, and the broker manager's
@@ -19,7 +20,7 @@ import { TradingService } from './trading.service';
 @Module({
   imports: [PrismaModule, AccountingModule, MarketModule, PermissionsModule, PushModule],
   controllers: [TradingController],
-  providers: [TradingService],
-  exports: [TradingService],
+  providers: [TradingService, ReceiptService],
+  exports: [TradingService, ReceiptService],
 })
 export class TradingModule {}

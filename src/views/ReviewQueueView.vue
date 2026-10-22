@@ -109,6 +109,15 @@
             >
               <i class="material-icons">local_shipping</i> ثبت تحویل
             </button>
+            <button
+              type="button"
+              class="btn btn--sm"
+              :disabled="downloadBusy[o.id]"
+              @click="downloadReceipt(o)"
+            >
+              <i class="material-icons">{{ downloadBusy[o.id] ? 'hourglass_empty' : 'download' }}</i>
+              دانلود رسید
+            </button>
           </div>
 
         </li>
@@ -122,11 +131,13 @@ import { onMounted, reactive, ref } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { faMoney } from '../utils/format'
 import { openLogin } from '../utils/authGate'
+import { downloadOrderReceipt } from '../utils/receipt.js'
 
 const auth = useAuthStore()
 const orders = ref([])
 const loading = ref(false)
 const notes = reactive({})
+const downloadBusy = reactive({})
 
 const shortId = id => String(id ?? '').slice(0, 8)
 
@@ -159,6 +170,18 @@ async function review(id, approve) {
 async function fulfill(id) {
   const { ok } = await auth.fulfillOrder(id)
   if (ok) await load()
+}
+
+async function downloadReceipt(o) {
+  if (downloadBusy[o.id]) return
+  downloadBusy[o.id] = true
+  try {
+    await downloadOrderReceipt(o.id, o.ref)
+  } catch (e) {
+    auth.error = e?.message || 'دانلود رسید ناموفق بود'
+  } finally {
+    downloadBusy[o.id] = false
+  }
 }
 
 onMounted(() => { if (auth.isLoggedIn) load() })
