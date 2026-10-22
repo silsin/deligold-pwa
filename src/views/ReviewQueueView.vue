@@ -112,7 +112,6 @@
             <button
               type="button"
               class="btn btn--sm"
-              v-if="['APPROVED','REJECTED','FULFILLED'].includes(o.status)"
               :disabled="downloadBusy[o.id]"
               @click="downloadReceipt(o)"
             >

@@ -50,7 +50,7 @@
         <tr v-for="o in visible" :key="o.id">
           <td>
             <button
-              v-if="['APPROVED','REJECTED','FULFILLED'].includes(o.status)"
+              v-if="['FILLED','APPROVED','REJECTED','FULFILLED'].includes(o.status)"
               type="button"
               class="btn-receipt"
               :disabled="downloadBusy[o.id]"

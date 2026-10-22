@@ -43,13 +43,16 @@ function jalaliDate(d: Date): string {
 // ── Status labels ─────────────────────────────────────────────────────────
 
 const STATUS_FA: Record<string, string> = {
+  FILLED: 'انجام شده',
   APPROVED: 'تأیید شده',
   REJECTED: 'رد شده',
   FULFILLED: 'انجام شده / تحویل داده شده',
+  PENDING_REVIEW: 'در انتظار بررسی',
+  AWAITING_RECEIPT: 'در انتظار رسید',
 };
 
-/** Only orders in these statuses may produce a receipt. */
-const RECEIPT_STATUSES = new Set(['APPROVED', 'REJECTED', 'FULFILLED']);
+/** Orders in any of these statuses may produce a receipt. */
+const RECEIPT_STATUSES = new Set(['FILLED', 'APPROVED', 'REJECTED', 'FULFILLED', 'PENDING_REVIEW']);
 
 // ── Font path (resolved at runtime so it works in dev + prod) ─────────────
 // Note: if Vazirmatn is not present at this path the service silently falls
