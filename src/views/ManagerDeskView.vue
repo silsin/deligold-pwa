@@ -377,8 +377,7 @@ async function unblock(u) {
 }
 
 async function decide(kind, id, approve) {
-  const { ok: done } = await auth.decideCash(kind, id, approve)
-  if (done) await auth.fetchCashPending()
+  await auth.decideCash(kind, id, approve)
 }
 
 function openPrices() {

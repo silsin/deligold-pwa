@@ -22,6 +22,7 @@ const CustomersView = () => import('../views/CustomersView.vue')
 const JoinView = () => import('../views/JoinView.vue')
 const StoreSetupView = () => import('../views/StoreSetupView.vue')
 const PricingRulesView = () => import('../views/PricingRulesView.vue')
+const NotificationsView = () => import('../views/NotificationsView.vue')
 
 /**
  * Live gold/silver trading app. Home is the price board (خرید/فروش quotes),

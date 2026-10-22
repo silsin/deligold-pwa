@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as webpush from 'web-push';
 import { PrismaService } from '../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type { SubscribeDto } from './dto/push.dto';
 
 // ── Payload / event types ─────────────────────────────────────────────────
@@ -136,6 +137,7 @@ export class PushService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   onModuleInit() {
@@ -204,28 +206,44 @@ export class PushService implements OnModuleInit {
     switch (event.type) {
       // Broker manager events
       case 'NEW_ORDER':
+        await this.sendToBrokerManagers(event.brokerId, payload);
+        await this.saveForManagers(event.brokerId, {
+          title: payload.title, body: payload.body, kind: event.type, url: '/desk',
+        });
+        // Also notify the customer who placed the order
+        await this.sendToUser(event.userId, {
+          title: 'سفارش ثبت شد',
+          body: `سفارش ${event.ref} شما با موفقیت ثبت شد`,
+          icon: ICON, tag: 'ORDER_PLACED',
+          data: { url: '/orders' },
+        });
+        this.notifications.create(event.userId, {
+          title: 'سفارش ثبت شد',
+          body: `سفارش ${event.ref} شما با موفقیت ثبت شد`,
+          kind: 'NEW_ORDER', url: '/orders',
+        }).catch(() => undefined);
+        break;
+
       case 'NEW_DEPOSIT':
       case 'NEW_WITHDRAWAL':
       case 'NEW_CUSTOMER':
         await this.sendToBrokerManagers(event.brokerId, payload);
-        // Also notify the customer (for new order only)
-        if (event.type === 'NEW_ORDER') {
-          await this.sendToUser(event.userId, {
-            title: 'سفارش ثبت شد',
-            body: `سفارش ${event.ref} شما با موفقیت ثبت شد`,
-            icon: ICON, tag: 'ORDER_PLACED',
-            data: { url: '/orders' },
-          });
-        }
+        await this.saveForManagers(event.brokerId, {
+          title: payload.title, body: payload.body, kind: event.type, url: '/desk',
+        });
         break;
 
       case 'ORDER_STATUS':
         if (event.status === 'PENDING_REVIEW') {
-          // Only broker managers care about the review queue
           await this.sendToBrokerManagers(event.brokerId, payload);
+          await this.saveForManagers(event.brokerId, {
+            title: payload.title, body: payload.body, kind: event.type, url: '/desk',
+          });
         } else {
-          // APPROVED / REJECTED / FULFILLED → notify the customer
           await this.sendToUser(event.userId, payload);
+          this.notifications.create(event.userId, {
+            title: payload.title, body: payload.body, kind: event.type, url: '/orders',
+          }).catch(() => undefined);
         }
         break;
 
@@ -235,8 +253,29 @@ export class PushService implements OnModuleInit {
       case 'IDENTITY_DECISION':
       case 'ACCOUNT_SUSPENDED':
         await this.sendToUser(event.userId, payload);
+        this.notifications.create(event.userId, {
+          title: payload.title,
+          body: payload.body,
+          kind: event.type,
+          url: (event.type === 'ACCOUNT_SUSPENDED' || event.type === 'IDENTITY_DECISION')
+            ? '/account' : '/wallet',
+        }).catch(() => undefined);
         break;
     }
+  }
+
+  private async saveForManagers(
+    brokerId: string,
+    data: { title: string; body: string; kind: string; url: string },
+  ): Promise<void> {
+    if (!brokerId) return;
+    const managers = await this.prisma.user.findMany({
+      where: { brokerId, role: { in: ['BROKER_MANAGER', 'BROKER_ADMIN'] } },
+      select: { id: true },
+    });
+    await Promise.allSettled(
+      managers.map(m => this.notifications.create(m.id, data).catch(() => undefined)),
+    );
   }
 
   private async sendOne(

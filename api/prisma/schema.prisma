@@ -102,6 +102,7 @@ model User {
   grantedChanges RoleChange[]  @relation("RoleChangeGranter")
   sessions       Session[]
   pushSubscriptions PushSubscription[]
+  notifications  Notification[]
 
   @@index([role])
   @@index([brokerId])
@@ -714,3 +715,19 @@ model PushSubscription {
   @@index([userId])
 }
 
+// ── In-app notifications (صندوق پیام) ────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  kind      String
+  read      Boolean  @default(false)
+  url       String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([userId, read])
+}

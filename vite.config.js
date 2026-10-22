@@ -56,6 +56,7 @@ export default defineConfig({
       '/stores': { target: DG_API_TARGET, changeOrigin: true },
       '/uploads': { target: DG_API_TARGET, changeOrigin: true },
       '/push': { target: DG_API_TARGET, changeOrigin: true },
+      '/notifications': { target: DG_API_TARGET, changeOrigin: true },
     }
   },
   build: { outDir: 'dist', sourcemap: false, chunkSizeWarningLimit: 900 }
