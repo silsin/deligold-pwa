@@ -55,12 +55,16 @@ export class TradingController {
    * Downloads a PDF receipt for a single order.
    * Auth: customer sees only own order; staff sees broker-scoped; SUPER_ADMIN sees all.
    * Status: APPROVED, REJECTED, or FULFILLED only — others return 400.
+   *
+   * Uses @Res({ passthrough: true }) so NestJS's AllExceptionsFilter still fires
+   * when generateOrderReceipt throws (403, 404, 400). Without passthrough the
+   * filter is bypassed and the client would receive a raw 500 HTML error body.
    */
   @Get('orders/:id/receipt.pdf')
   async downloadReceipt(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
-    @Res() res: Response,
+    @Res({ passthrough: true }) res: Response,
   ) {
     const buffer = await this.receipt.generateOrderReceipt(id, user);
     res.set({
@@ -68,7 +72,7 @@ export class TradingController {
       'Content-Disposition': `attachment; filename="receipt-${id}.pdf"`,
       'Content-Length': buffer.length,
     });
-    res.send(buffer);
+    return buffer;
   }
 
   /**

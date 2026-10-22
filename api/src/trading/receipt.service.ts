@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import PDFDocument from 'pdfkit';
@@ -59,6 +59,8 @@ const FONT_PATH = path.join(process.cwd(), 'assets', 'fonts', 'Vazir.ttf');
 
 @Injectable()
 export class ReceiptService {
+  private readonly logger = new Logger(ReceiptService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   async generateOrderReceipt(
@@ -103,6 +105,12 @@ export class ReceiptService {
 
     // ── Font availability ─────────────────────────────────────────────────
     const useVazir = fs.existsSync(FONT_PATH);
+    if (!useVazir) {
+      this.logger.warn(
+        `Vazir.ttf not found at ${FONT_PATH} — receipt will use Helvetica with Latin labels. ` +
+          'Place Vazirmatn-Regular.ttf at api/assets/fonts/Vazir.ttf to enable Persian text.',
+      );
+    }
 
     // ── Build PDF ─────────────────────────────────────────────────────────
     return new Promise<Buffer>((resolve, reject) => {
