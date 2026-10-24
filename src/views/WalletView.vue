@@ -36,7 +36,15 @@
           <span class="balance__pill">کارمزد {{ faPercent(auth.feePercent, 2) }}</span>
         </div>
 
-        <div class="balance__value tnum">{{ faMoney(auth.balance) }}</div>
+        <div v-if="!auth.user?.verifiedAt" class="balance__unverified">
+          <span class="material-icons">warning_amber</span>
+          حساب تأییدنشده — واریز با رسید دستی انجام می‌شود
+        </div>
+
+        <div class="balance__value tnum">
+          {{ faMoney(auth.balance, '') }}
+          <span class="balance__unit">تومان</span>
+        </div>
 
         <div class="balance__cells">
           <div class="balance__cell">
@@ -57,7 +65,7 @@
 
         <div class="balance__actions">
           <button type="button" class="act act--in" @click="openPanel('deposit')">
-            <span class="material-icons">add</span> واریز
+            <span class="material-icons act__icon">add</span> واریز
           </button>
           <button
             type="button"
@@ -65,7 +73,7 @@
             :disabled="auth.balance <= 0"
             @click="openPanel('withdraw')"
           >
-            <span class="material-icons">remove</span> برداشت
+            <span class="material-icons act__icon">remove</span> برداشت
           </button>
           <button
             type="button"
@@ -73,7 +81,7 @@
             :disabled="!holdings.length"
             @click="openPanel('convert')"
           >
-            <span class="material-icons">swap_horiz</span> تبدیل طلا
+            <span class="material-icons act__icon">swap_horiz</span> تبدیل طلا
           </button>
         </div>
       </section>
@@ -110,8 +118,16 @@
             </div>
             <div class="holding__side">
               <b class="tnum">{{ faWeight(h.grams) }}</b>
+              <small v-if="h.marketValue" class="tnum muted">{{ faMoney(h.marketValue) }}</small>
               <small class="tnum" :class="h.pnl >= 0 ? 'is-up' : 'is-down'">
                 {{ faDelta(h.pnl) }}
+              </small>
+              <small
+                v-if="h.grams && h.avgCost"
+                class="tnum holding__pct"
+                :class="h.pnl >= 0 ? 'is-up' : 'is-down'"
+              >
+                {{ h.pnl >= 0 ? '+' : '−' }}{{ faPercent(Math.abs(h.pnl / (h.grams * h.avgCost)) * 100, 1) }}
               </small>
             </div>
             <button
@@ -168,21 +184,24 @@
         </div>
 
         <ul v-else class="ledger">
-          <li v-for="tx in auth.transactions" :key="tx.id" class="tx">
-            <span class="tx__icon material-icons" :class="`is-${txKindTone(tx.kind)}`">
-              {{ txKindIcon(tx.kind) }}
-            </span>
-            <div class="tx__main">
-              <b class="tx__kind">{{ faTxKind(tx.kind) }}</b>
-              <small class="muted tx__note">{{ tx.note || '—' }}</small>
-            </div>
-            <div class="tx__side">
-              <b class="tnum" :class="`is-${txKindTone(tx.kind)}`">
-                {{ faTxAmount(tx) }}
-              </b>
-              <small class="muted tnum">{{ faJalaliDateTime(tx.createdAt) }}</small>
-            </div>
-          </li>
+          <template v-for="(item, idx) in groupedTransactions" :key="idx">
+            <li v-if="item.type === 'date'" class="tx__date-sep">{{ item.label }}</li>
+            <li v-else class="tx">
+              <span class="tx__icon material-icons" :class="`is-${txKindTone(item.tx.kind)}`">
+                {{ txKindIcon(item.tx.kind) }}
+              </span>
+              <div class="tx__main">
+                <b class="tx__kind">{{ faTxKind(item.tx.kind) }}</b>
+                <small class="muted tx__note">{{ item.tx.note || '—' }}</small>
+              </div>
+              <div class="tx__side">
+                <b class="tnum" :class="`is-${txKindTone(item.tx.kind)}`">
+                  {{ faTxAmount(item.tx) }}
+                </b>
+                <small class="muted tnum">{{ faJalaliDateTime(item.tx.createdAt) }}</small>
+              </div>
+            </li>
+          </template>
         </ul>
       </section>
     </template>
@@ -233,6 +252,7 @@ import {
   faAgo,
   faTxAmount,
   faTxKind,
+  faJalaliDate,
   faJalaliDateTime,
   txKindIcon,
   txKindTone,
@@ -273,6 +293,23 @@ const holdings = computed(() =>
 const goldValue = computed(() =>
   holdings.value.reduce((sum, h) => sum + (Number(h.marketValue) || 0), 0)
 )
+
+/** Group transactions by Jalali date for the ledger date separators. */
+const groupedTransactions = computed(() => {
+  const groups = []
+  let lastDate = null
+  const todayD = faJalaliDate(Date.now())
+  for (const tx of auth.transactions) {
+    const d = faJalaliDate(tx.createdAt)
+    const label = d === todayD ? 'امروز' : d
+    if (d !== lastDate) {
+      groups.push({ type: 'date', label })
+      lastDate = d
+    }
+    groups.push({ type: 'tx', tx })
+  }
+  return groups
+})
 
 /** Live price per symbol, for the convert sheet's quote preview. */
 const priceMap = computed(() => market.prices)
@@ -447,12 +484,13 @@ onUnmounted(() => {
 
 /* ── Balance hero ────────────────────────────────────────────────────────── */
 .balance {
-  padding: 18px 16px 16px;
-  border-radius: var(--radius);
+  padding: 20px 18px 18px;
+  border-radius: 20px;
   background:
-    radial-gradient(120% 130% at 100% 0%, rgba(212, 175, 55, 0.16), transparent 62%),
+    radial-gradient(140% 160% at 110% -10%, rgba(212, 175, 55, 0.28), transparent 60%),
     var(--card);
   border: 1px solid var(--border);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.18);
 }
 
 .balance__top {
@@ -487,11 +525,38 @@ onUnmounted(() => {
 }
 
 .balance__value {
-  margin: 8px 0 0;
-  font-size: 30px;
+  margin: 10px 0 0;
+  font-size: 36px;
   font-weight: 900;
-  line-height: 1.25;
-  letter-spacing: -0.4px;
+  line-height: 1.1;
+  letter-spacing: -0.5px;
+}
+
+.balance__unit {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+  margin-top: 2px;
+}
+
+.balance__unverified {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, #d99a00 12%, var(--card));
+  border: 1px solid #d99a00;
+  color: #d99a00;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.balance__unverified .material-icons {
+  font-size: 15px;
+  flex-shrink: 0;
 }
 
 .balance__cells {
@@ -535,19 +600,19 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
-  padding: 11px 6px;
+  gap: 6px;
+  padding: 14px 8px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: var(--surface);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 800;
   color: var(--text);
   transition: border-color 0.15s ease, background 0.15s ease, transform 0.1s ease;
 }
 
-.act .material-icons {
-  font-size: 18px;
+.act .act__icon {
+  font-size: 20px;
 }
 
 .act:active:not(:disabled) {
@@ -558,6 +623,10 @@ onUnmounted(() => {
   opacity: 0.42;
   cursor: default;
 }
+
+.act--in .act__icon { color: var(--up); }
+.act--out .act__icon { color: var(--down); }
+.act--swap .act__icon { color: var(--accent); }
 
 .act--in:hover:not(:disabled) {
   border-color: var(--up);
@@ -627,24 +696,26 @@ onUnmounted(() => {
   border-radius: var(--radius-sm);
   background: var(--card);
   border: 1px solid var(--border);
+  border-inline-start: 3px solid var(--accent);
   transition: border-color 0.15s ease;
 }
 
 .holding:hover {
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+  border-inline-start-color: var(--accent);
 }
 
 .holding__icon {
   flex-shrink: 0;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
   color: var(--accent);
-  font-size: 19px;
+  font-size: 22px;
 }
 
 .holding__main {
@@ -656,7 +727,7 @@ onUnmounted(() => {
 }
 
 .holding__name {
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 800;
 }
 
@@ -673,7 +744,7 @@ onUnmounted(() => {
 }
 
 .holding__side b {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 900;
 }
 
@@ -695,13 +766,13 @@ onUnmounted(() => {
 
 .tx__icon {
   flex-shrink: 0;
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 9px;
-  font-size: 17px;
+  border-radius: 12px;
+  font-size: 19px;
 }
 
 .tx__main {
@@ -939,6 +1010,22 @@ onUnmounted(() => {
 .holding__swap:hover {
   color: var(--accent);
   border-color: var(--accent);
+}
+
+.holding__pct {
+  font-size: 10px;
+  font-weight: 800;
+}
+
+/* ── Transaction date separator ──────────────────────────────────────────── */
+.tx__date-sep {
+  padding: 10px 13px 4px;
+  font-size: 10.5px;
+  font-weight: 800;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+  list-style: none;
+  background: transparent;
 }
 
 /* ── Notices ─────────────────────────────────────────────────────────────── */

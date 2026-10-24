@@ -9,6 +9,17 @@
       </div>
       <div class="topbar__meta">
         <span class="topbar__clock">{{ clock }}</span>
+        <RouterLink
+          v-if="auth.isLoggedIn"
+          to="/notifications"
+          class="topbar__bell"
+          aria-label="پیام‌ها"
+        >
+          <i class="material-icons">notifications</i>
+          <span v-if="notifications.unreadCount > 0" class="topbar__bell-badge">
+            {{ notifications.unreadCount > 99 ? '۹۹+' : notifications.unreadCount }}
+          </span>
+        </RouterLink>
         <RouterLink v-if="auth.isLoggedIn" to="/account" class="topbar__wallet">
           <i class="material-icons">account_balance_wallet</i>
           <span>{{ faMoney(auth.balance) }}</span>
@@ -89,6 +100,7 @@ import { RouterLink, RouterView } from 'vue-router'
 import { useMarketStore } from './stores/market'
 import { useAuthStore } from './stores/auth'
 import { usePushStore } from './stores/push'
+import { useNotificationsStore } from './stores/notifications'
 import AppDrawer from './components/AppDrawer.vue'
 import LoginSheet from './components/LoginSheet.vue'
 import TermsModal from './components/TermsModal.vue'
@@ -102,10 +114,12 @@ import { api } from './utils/api.js'
 const market = useMarketStore()
 const auth = useAuthStore()
 const push = usePushStore()
+const notifications = useNotificationsStore()
 const clock = ref('')
 const drawerOpen = ref(false)
 const showTerms = ref(false)
 let inviteWaitsForTerms = false
+let notifTimer = null
 
 function onTermsClosed() {
   showTerms.value = false
@@ -170,11 +184,18 @@ onMounted(() => {
   }
   if (auth.isLoggedIn) void auth.fetchAccount()
   if (auth.isLoggedIn) void push.init()
+  if (auth.isLoggedIn) {
+    void notifications.fetchUnreadCount()
+    notifTimer = setInterval(() => {
+      if (auth.isLoggedIn) void notifications.fetchUnreadCount()
+    }, 60_000)
+  }
 })
 
 onBeforeUnmount(() => {
   market.stopPolling()
   if (timer) clearInterval(timer)
+  if (notifTimer) clearInterval(notifTimer)
 })
 </script>
 
@@ -380,6 +401,35 @@ button {
 
 .tab.router-link-active {
   color: var(--accent);
+}
+
+.topbar__bell {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 18px;
+}
+
+.topbar__bell-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--down);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1.6;
+  text-align: center;
 }
 </style>
 

@@ -12,7 +12,7 @@
 
       <!-- Request summary -->
       <div class="sum">
-        <div class="sum__row">
+        <div class="sum__row sum__row--amount">
           <span>مبلغ</span>
           <b class="tnum">{{ faMoney(deposit.amount) }}</b>
         </div>
@@ -68,7 +68,9 @@
           <small v-if="receiptName" class="upload__name">{{ receiptName }}</small>
         </div>
 
-        <p v-if="error" class="sheet__err" role="alert">{{ error }}</p>
+        <p v-if="error" class="sheet__err" role="alert">
+          <i class="material-icons">error_outline</i>{{ error }}
+        </p>
 
         <button type="button" class="sheet__cta" :disabled="!valid || busy" @click="submit">
           <span v-if="busy" class="spin" aria-hidden="true"></span>
@@ -87,7 +89,9 @@
           <small>پس از اتصال، مبلغ به‌صورت خودکار به کیف پول شما افزوده می‌شود.</small>
         </div>
 
-        <p v-if="error" class="sheet__err" role="alert">{{ error }}</p>
+        <p v-if="error" class="sheet__err" role="alert">
+          <i class="material-icons">error_outline</i>{{ error }}
+        </p>
 
         <button type="button" class="sheet__cta" :disabled="busy" @click="connect">
           <span v-if="busy" class="spin" aria-hidden="true"></span>
@@ -235,6 +239,7 @@ function copy(text, key) {
   padding: 13px 14px;
   border-radius: 14px;
   border: 1px solid var(--border);
+  border-inline-start: 3px solid var(--accent);
   background: var(--card);
 }
 
@@ -247,6 +252,7 @@ function copy(text, key) {
 }
 
 .sum__row b { color: var(--text); font-weight: 800; }
+.sum__row--amount b { font-size: 18px; font-weight: 900; }
 .sum__pending { color: #d99a00; }
 
 .sheet__hint {
@@ -340,8 +346,16 @@ function copy(text, key) {
 
 .sheet__err {
   margin: 12px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   color: var(--down);
+}
+
+.sheet__err .material-icons {
+  font-size: 15px;
+  flex-shrink: 0;
 }
 
 /* ── Actions ────────────────────────────────────────────────────────────── */
@@ -350,11 +364,12 @@ function copy(text, key) {
   width: 100%;
   margin-top: 16px;
   padding: 14px;
+  min-height: 52px;
   border-radius: 13px;
   background: var(--accent);
   color: #fff;
-  font-size: 14.5px;
-  font-weight: 800;
+  font-size: 15px;
+  font-weight: 900;
 }
 
 .sheet__cta:disabled {

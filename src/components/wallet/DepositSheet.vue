@@ -100,7 +100,9 @@
         />
       </label>
 
-      <p v-if="error" class="sheet__err" role="alert">{{ error }}</p>
+      <p v-if="error" class="sheet__err" role="alert">
+        <i class="material-icons">error_outline</i>{{ error }}
+      </p>
 
       <button type="submit" class="sheet__cta" :disabled="!valid || busy">
         <span v-if="busy" class="spin" aria-hidden="true"></span>
@@ -296,19 +298,20 @@ function submit() {
 
 .field__label {
   display: block;
-  font-size: 11.5px;
-  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
   margin-bottom: 6px;
 }
 
 .field__input {
   width: 100%;
-  padding: 12px 13px;
+  padding: 14px 16px;
   border-radius: 11px;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   outline: none;
@@ -320,9 +323,11 @@ function submit() {
 
 .field__echo {
   display: block;
-  margin-top: 6px;
-  font-size: 11px;
-  color: var(--text-muted);
+  margin-top: 8px;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
 }
 
 .chips {
@@ -349,15 +354,24 @@ function submit() {
 }
 
 .sheet__err {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin: 10px 0 0;
   font-size: 11.5px;
   color: var(--down);
 }
 
+.sheet__err .material-icons {
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
 .sheet__cta {
   width: 100%;
   margin-top: 14px;
-  padding: 13px;
+  padding: 14px;
+  min-height: 52px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -365,8 +379,8 @@ function submit() {
   border-radius: 12px;
   background: var(--accent);
   color: #fff;
-  font-size: 14px;
-  font-weight: 800;
+  font-size: 15px;
+  font-weight: 900;
 }
 
 .sheet__cta:disabled {

@@ -54,6 +54,13 @@
             <button type="button" class="drawer__item" @click="go('/wallet')">
               <i class="material-icons">savings</i> کیف پول
             </button>
+            <button type="button" class="drawer__item" @click="go('/notifications')">
+              <i class="material-icons">inbox</i>
+              پیام‌ها
+              <span v-if="notifications.unreadCount > 0" class="drawer__badge">
+                {{ notifications.unreadCount > 99 ? '۹۹+' : toFa(notifications.unreadCount) }}
+              </span>
+            </button>
           </template>
 
           <!-- Customers and guests join a broker by scanning its invite QR. -->
@@ -125,7 +132,9 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useNotificationsStore } from '../stores/notifications'
 import { ROLE_LABELS } from '../utils/roles'
+import { toFa } from '../utils/format'
 import TermsModal from './TermsModal.vue'
 import { applyPalette, loadPaletteId, savePaletteId, DEFAULT_PALETTE_ID } from '../theme'
 
@@ -134,6 +143,7 @@ const emit = defineEmits(['close'])
 
 const router = useRouter()
 const auth = useAuthStore()
+const notifications = useNotificationsStore()
 const showTerms = ref(false)
 const isDark = ref(loadPaletteId() !== 'light' && loadPaletteId() !== 'cream-light')
 const roleLabel = computed(() => ROLE_LABELS[auth.role] ?? '')
@@ -362,6 +372,18 @@ function toggleTheme() {
 .drawer-enter-from .drawer__panel,
 .drawer-leave-to .drawer__panel {
   transform: translateX(100%);
+}
+
+.drawer__badge {
+  margin-right: auto;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #14100a;
+  font-size: 10.5px;
+  font-weight: 900;
+  text-align: center;
 }
 </style>
 

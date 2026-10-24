@@ -85,7 +85,9 @@
         </div>
       </div>
 
-      <p v-if="error" class="sheet__err" role="alert">{{ error }}</p>
+      <p v-if="error" class="sheet__err" role="alert">
+        <i class="material-icons">error_outline</i>{{ error }}
+      </p>
 
       <button type="submit" class="sheet__cta" :disabled="!canSubmit || busy">
         <span v-if="busy" class="spin" aria-hidden="true"></span>
@@ -207,4 +209,219 @@ function submit() {
   error.value = ''
 }
 </script>
+
+<style scoped>
+.sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.sheet__scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.sheet__panel {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  border-radius: 18px 18px 0 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  padding: 12px 14px calc(16px + env(safe-area-inset-bottom));
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.sheet__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14.5px;
+  font-weight: 900;
+  padding: 2px 2px 12px;
+}
+
+.sheet__x {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text-muted);
+}
+
+.field {
+  display: block;
+  margin-top: 12px;
+}
+
+.field__label {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.field__input {
+  width: 100%;
+  padding: 13px 14px;
+  border-radius: 11px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  outline: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.field__input:focus {
+  border-color: var(--accent);
+}
+
+.field__max {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-inline-start: 6px;
+}
+
+.field--mt {
+  margin-top: 14px;
+}
+
+.swap {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0;
+  color: var(--text-muted);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.chip {
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.chip:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.quote {
+  margin-top: 14px;
+  padding: 13px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  border-inline-start: 3px solid var(--accent);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.quote__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.quote__row span {
+  color: var(--text-muted);
+}
+
+.quote__row b {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.quote__row--fee b {
+  color: var(--down);
+}
+
+.quote__row--net b {
+  color: var(--up);
+  font-size: 15px;
+}
+
+.sheet__err {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 0;
+  font-size: 11.5px;
+  color: var(--down);
+}
+
+.sheet__err .material-icons {
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.sheet__cta {
+  width: 100%;
+  margin-top: 14px;
+  padding: 14px;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.sheet__cta:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.sheet__fine {
+  margin: 10px 0 0;
+  font-size: 10.5px;
+  line-height: 1.7;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.spin {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+</style>
 

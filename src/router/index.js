@@ -78,6 +78,8 @@ const routes = [
   { path: '/store-setup', name: 'store-setup', component: StoreSetupView, meta: { title: 'تنظیمات فروشگاه', requiresAuth: true, roles: STAFF_ROLES } },
   // Broker manager per-symbol pricing rules (margin on the live raw price).
   { path: '/pricing-rules', name: 'pricing-rules', component: PricingRulesView, meta: { title: 'قوانین قیمت‌گذاری', requiresAuth: true, roles: STAFF_ROLES } },
+  // Notification inbox — all logged-in users.
+  { path: '/notifications', name: 'notifications', component: NotificationsView, meta: { title: 'پیام‌ها', requiresAuth: true } },
   // Unknown path → the board, never a blank screen.
   { path: '/:pathMatch(.*)*', redirect: '/' }
 ]
