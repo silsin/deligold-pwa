@@ -1,5 +1,5 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { BoardPrice, BrokerPriceRule, Prisma } from '@prisma/client';
+import { BoardPrice, BrokerPriceRule, PriceSource, PriceTick, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { TradeError } from '../common/errors';
 import { TRADE_SYMBOLS, isTradeSymbol } from './symbols';
@@ -36,7 +36,7 @@ export interface Quote {
   buy: number | null;
   /** What the shop SELLS at (a customer buying). Null when the source has no spread. */
   sell: number | null;
-  /** True when a broker manager set this price manually (overrides the feed). */
+  /** True when a manager set this price manually (overrides the feed). */
   manual?: boolean;
   /** False when the customer's broker has closed customer buying of this symbol. */
   canBuy?: boolean;
@@ -46,7 +46,7 @@ export interface Quote {
 
 export interface Board {
   quotes: Record<string, Quote>;
-  /** Which source fed the board: "estjt" | "tgju" | "akbari" | "fallback". */
+  /** Which source fed the board, by name. */
   source: string;
   updatedAt: number;
   /** True when the last fetch failed and we are serving a cached/fallback board. */
@@ -72,6 +72,33 @@ export interface BoardPriceView {
   updatedAt: Date;
 }
 
+/** One source row flattened for the super-admin UI, with live health. */
+export interface SourceView {
+  id: string;
+  name: string;
+  kind: string;
+  enabled: boolean;
+  priority: number;
+  isSystem: boolean;
+  note: string;
+  /** Parsed config with any secret-looking keys stripped. */
+  config: Record<string, unknown>;
+  /** Whether the service has a recent cached reading for this source. */
+  health: { fresh: boolean; updatedAt: number | null };
+  updatedAt: Date;
+}
+
+/** One price-tick reading, flattened for the super-admin live chart. */
+export interface PriceTickView {
+  symbol: string;
+  source: string;
+  price: number;
+  buy: number | null;
+  sell: number | null;
+  /** Epoch ms — the chart's X axis. */
+  at: number;
+}
+
 /** How long a fetched board is served before the next request re-fetches it. */
 const CACHE_TTL_MS = 60_000;
 
@@ -85,12 +112,19 @@ const STALE_HOLD_MS = 3 * 60_000;
 /** Background warm-up tick. Keeps the cache fresh even with no clients polling. */
 const POLL_INTERVAL_MS = 5 * 60_000;
 
-type MarketSourceChoice = 'auto' | 'estjt' | 'tgju' | 'akbari';
+/** How often the recorder samples every enabled source and writes price ticks. */
+const RECORD_INTERVAL_MS = 20_000;
 
-/** Which upstream source(s) to consult, from MARKET_SOURCE (default "auto"). */
-function marketSourceChoice(env: NodeJS.ProcessEnv = process.env): MarketSourceChoice {
-  const v = (env.MARKET_SOURCE ?? 'auto').trim().toLowerCase();
-  return v === 'estjt' || v === 'tgju' || v === 'akbari' ? v : 'auto';
+/** How often old price ticks are pruned. */
+const PRUNE_INTERVAL_MS = 6 * 60 * 60_000;
+
+/** Price ticks older than this are deleted. */
+const TICK_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** A source adapter's result: the quotes it could produce, and when. */
+interface SourceResult {
+  quotes: Record<string, Quote>;
+  updatedAt: number;
 }
 
 /**
@@ -106,6 +140,14 @@ const FALLBACK_PRICES: Record<string, number> = {
   COIN_QUARTER: 75_000_000,
 };
 
+/** The built-in sources seeded on first boot, ordered by default priority. */
+const DEFAULT_SOURCES = [
+  { name: 'akbari', kind: 'akbari', priority: 10, isSystem: true, enabled: true },
+  { name: 'tgju', kind: 'tgju', priority: 20, isSystem: true, enabled: true },
+  { name: 'estjt', kind: 'estjt', priority: 30, isSystem: true, enabled: true },
+  { name: 'trades', kind: 'trades', priority: 40, isSystem: true, enabled: true },
+];
+
 @Injectable()
 export class MarketService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(MarketService.name);
@@ -117,6 +159,14 @@ export class MarketService implements OnModuleInit, OnModuleDestroy {
   /** Until this time, serve the cached board even past TTL (partial-fetch throttle). */
   private staleHoldUntil = 0;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private recordTimer: ReturnType<typeof setInterval> | null = null;
+  private pruneTimer: ReturnType<typeof setInterval> | null = null;
+
+  /** Per-source adapter cache: name → { quotes, updatedAt }. Protects upstreams
+   *  from being re-fetched more than once per CACHE_TTL. */
+  private sourceCache = new Map<string, SourceResult>();
+  /** Last written tick per source|symbol, to skip identical flat ticks. */
+  private lastTickSeen = new Map<string, { price: number; at: number }>();
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -126,10 +176,18 @@ export class MarketService implements OnModuleInit, OnModuleDestroy {
     // customer should wait on that for a board refresh.
     void this.board().catch(err => this.logger.warn(`initial board warm-up failed: ${String(err)}`));
     this.pollTimer = setInterval(() => void this.board().catch(() => {}), POLL_INTERVAL_MS);
+    // Start recording price ticks for the super-admin live chart immediately and
+    // on a short cadence so the chart has a live feel without hammering upstreams
+    // (each source is only re-fetched at most once per CACHE_TTL_MS).
+    void this.recordAllSources().catch(err => this.logger.warn(`initial tick record failed: ${String(err)}`));
+    this.recordTimer = setInterval(() => void this.recordAllSources().catch(() => {}), RECORD_INTERVAL_MS);
+    this.pruneTimer = setInterval(() => void this.pruneTicks().catch(() => {}), PRUNE_INTERVAL_MS);
   }
 
   onModuleDestroy(): void {
     if (this.pollTimer) clearInterval(this.pollTimer);
+    if (this.recordTimer) clearInterval(this.recordTimer);
+    if (this.pruneTimer) clearInterval(this.pruneTimer);
   }
 
   /**
@@ -176,6 +234,16 @@ export class MarketService implements OnModuleInit, OnModuleDestroy {
    */
   invalidate(): void {
     this.cache = null;
+  }
+
+  /**
+   * Drop the per-source adapter cache and the merged board. Called by the
+   * super-admin service after a source is created/updated/deleted/reordered so
+   * the change reaches the board (and the recorder) at once.
+   */
+  invalidateSources(): void {
+    this.sourceCache.clear();
+    this.invalidate();
   }
 
   /**
@@ -277,97 +345,50 @@ export class MarketService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Builds the board by walking the source fallback chain.
+   * Builds the board by walking the enabled source registry in priority order.
    *
-   * In "auto": ESTJT (the official union) → TGJU gap-fills whatever ESTJT missed
-   * → Akbari fills the rest → the last fresh snapshot → the canned fallback.
-   * An explicit choice (estjt/tgju/akbari) consults only that source, then
-   * snapshot/fallback. Each step is best-effort: a slow or dead source is
-   * skipped and the next fills the gaps, so a single outage never blanks the
-   * board.
+   * Each enabled source runs through its adapter; the first source (by
+   * priority) to provide a symbol wins, and the rest gap-fill whatever is
+   * missing — so a single outage never blanks the board. When every live source
+   * is unreachable the last fresh snapshot is used, then the canned fallback.
+   * Each step is best-effort: a slow or dead source is skipped and the next
+   * fills the gaps.
+   *
+   * The sources are DB rows (`PriceSource`); built-in code fetchers stay in
+   * code and are driven by those rows. Adapters share a per-source cache so the
+   * board fetch and the tick recorder never re-fetch a source more than once
+   * per `CACHE_TTL_MS`.
    */
   private async fetchBoard(): Promise<Board> {
-    const choice = marketSourceChoice();
+    const sources = await this.loadSources();
     const quotes: Record<string, Quote> = {};
-    /** Symbols obtained from a fresh live source this cycle (not memo/snapshot/fallback). */
     const freshSymbols = new Set<string>();
     const staleRateKeys: string[] = [];
     let primarySource = '';
     let updatedAt = Date.now();
 
-    /** Writes a mid-only rate as a two-sided quote; first source wins. */
-    const setFromRate = (symbol: string, price: number): boolean => {
-      if (quotes[symbol]) return false;
-      if (!Number.isFinite(price) || price <= 0) return false;
-      const rounded = Math.round(price);
-      // No synthetic spread — public sources (TGJU/ESTJT) only carry a mid price.
-      // The client applies its own fee model on top; a double spread would show
-      // three visibly different numbers on the board tile.
-      quotes[symbol] = { symbol, price: rounded, buy: null, sell: null };
-      return true;
-    };
-
     const missing = () => TRADE_SYMBOLS.some(s => !quotes[s.symbol]);
 
-    // 1. Akbari — primary source, real per-side margins, credentials required.
-    if (choice === 'akbari' || choice === 'auto') {
-      try {
-        const cfg = akbariConfig();
-        if (akbariConfigured(cfg)) {
-          const upstream = await fetchAkbariBoard(cfg);
-          const akQuotes = this.mapUpstream(upstream);
-          for (const symbol of Object.keys(akQuotes)) {
-            if (quotes[symbol]) continue;
-            quotes[symbol] = akQuotes[symbol];
-            freshSymbols.add(symbol);
-            if (!primarySource) primarySource = 'akbari';
-            updatedAt = upstream.updatedAt;
-          }
-        } else {
-          this.logger.warn('Akbari credentials not set — skipping primary source');
-        }
-      } catch (err) {
-        this.logger.warn(`akbari fetch failed: ${String(err)}`);
+    for (const src of sources) {
+      const qs = await this.getSourceQuotes(src);
+      if (!qs) continue;
+      for (const symbol of Object.keys(qs)) {
+        if (quotes[symbol]) continue; // first source wins
+        const q = qs[symbol];
+        if (!q || !Number.isFinite(q.price) || q.price <= 0) continue;
+        quotes[symbol] = q;
+        freshSymbols.add(symbol);
+        if (!primarySource) primarySource = src.name;
       }
     }
-
-    // 2. TGJU — gap-fill anything Akbari missed.
-    if (missing() && (choice === 'tgju' || choice === 'auto')) {
-      try {
-        const board = await fetchTgjuBoard();
-        const memoKeys = new Set(board.staleRates);
-        for (const [rateKey, price] of board.rates) {
-          const symbol = RATE_KEY_TO_SYMBOL[rateKey];
-          if (!symbol || quotes[symbol]) continue;
-          if (!setFromRate(symbol, price)) continue;
-          if (!primarySource) primarySource = 'tgju';
-          updatedAt = board.updatedAt;
-          if (memoKeys.has(rateKey)) staleRateKeys.push(symbol);
-          else freshSymbols.add(symbol);
-        }
-      } catch (err) {
-        this.logger.warn(`tgju fetch failed: ${String(err)}`);
-      }
+    // Use the winning source's timestamp so the board reports when its data
+    // was actually read, not "now".
+    if (primarySource) {
+      const hit = this.sourceCache.get(primarySource);
+      if (hit) updatedAt = hit.updatedAt;
     }
 
-    // 3. ESTJT — official union, try as last live gap-fill (may be blocked from some IPs).
-    if (missing() && (choice === 'estjt' || choice === 'auto')) {
-      try {
-        const board = await fetchEstjtBoard();
-        for (const [rateKey, price] of board.rates) {
-          const symbol = RATE_KEY_TO_SYMBOL[rateKey];
-          if (symbol && setFromRate(symbol, price)) {
-            freshSymbols.add(symbol);
-            if (!primarySource) primarySource = 'estjt';
-            updatedAt = board.updatedAt;
-          }
-        }
-      } catch (err) {
-        this.logger.warn(`estjt fetch failed: ${String(err)}`);
-      }
-    }
-
-    // 4. Last fresh snapshot — an old real price beats a canned one.
+    // Last fresh snapshot — an old real price beats a canned one.
     if (missing() && this.lastSnapshot) {
       for (const { symbol } of TRADE_SYMBOLS) {
         if (quotes[symbol] || !this.lastSnapshot.quotes[symbol]) continue;
@@ -376,7 +397,7 @@ export class MarketService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    // 5. Canned fallback — the board still renders when everything else failed.
+    // Canned fallback — the board still renders when everything else failed.
     this.fillFallback(quotes, staleRateKeys);
 
     const source = primarySource || 'fallback';
@@ -463,6 +484,342 @@ export class MarketService implements OnModuleInit, OnModuleDestroy {
       return 'برخی نمادها از منبع پشتیبان تکمیل شدند.';
     }
     return '';
+  }
+
+  // ── Source registry & adapters ──────────────────────────────────────────
+
+  /** Parse a source's JSON config safely into an object. */
+  private parseConfig(config: string | null | undefined): Record<string, any> {
+    if (!config) return {};
+    try {
+      return JSON.parse(config) as Record<string, any>;
+    } catch {
+      return {};
+    }
+  }
+
+  /**
+   * Every enabled source in priority order. Seeds the built-in sources on first
+   * boot so the board works out of the box with no manual setup.
+   */
+  private async loadSources(): Promise<PriceSource[]> {
+    let rows = await this.prisma.priceSource.findMany({
+      where: { enabled: true },
+      orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
+    });
+    if (!rows.length) rows = await this.seedDefaultSources();
+    return rows;
+  }
+
+  /** Idempotently create the built-in sources, returning the enabled ones. */
+  private async seedDefaultSources(): Promise<PriceSource[]> {
+    for (const d of DEFAULT_SOURCES) {
+      await this.prisma.priceSource.upsert({
+        where: { name: d.name },
+        create: { ...d, config: '{}' },
+        update: {}, // leave any existing config/priority untouched
+      });
+    }
+    return this.prisma.priceSource.findMany({
+      where: { enabled: true },
+      orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
+    });
+  }
+
+  /** Run a source's adapter, returning its quotes and timestamp, or null. */
+  private async runAdapter(src: PriceSource): Promise<SourceResult | null> {
+    switch (src.kind) {
+      case 'akbari':
+        return this.fetchAkbariSource();
+      case 'tgju':
+        return this.fetchTgjuSource();
+      case 'estjt':
+        return this.fetchEstjtSource();
+      case 'trades':
+        return this.fetchTradesSource(src);
+      case 'manual':
+        return this.fetchManualSource(src);
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * A source's quotes, served from the per-source cache when fresh. On a fetch
+   * failure the last cached reading is served rather than blanking the symbol,
+   * so a flaky upstream does not flicker the board.
+   */
+  private async getSourceQuotes(src: PriceSource): Promise<Record<string, Quote> | null> {
+    const hit = this.sourceCache.get(src.name);
+    if (hit && Date.now() - hit.updatedAt < CACHE_TTL_MS) return hit.quotes;
+
+    let res: SourceResult | null = null;
+    try {
+      res = await this.runAdapter(src);
+    } catch (err) {
+      this.logger.warn(`source ${src.name} (${src.kind}) fetch failed: ${String(err)}`);
+      return hit ? hit.quotes : null;
+    }
+
+    if (res && Object.keys(res.quotes).length > 0) {
+      this.sourceCache.set(src.name, res);
+      return res.quotes;
+    }
+    return hit ? hit.quotes : null;
+  }
+
+  /** Akbari — primary source, real per-side margins, credentials required. */
+  private async fetchAkbariSource(): Promise<SourceResult | null> {
+    const cfg = akbariConfig();
+    if (!akbariConfigured(cfg)) {
+      this.logger.warn('Akbari credentials not set — skipping primary source');
+      return null;
+    }
+    const upstream = await fetchAkbariBoard(cfg);
+    return { quotes: this.mapUpstream(upstream), updatedAt: upstream.updatedAt };
+  }
+
+  /** TGJU — mid-only public source. */
+  private async fetchTgjuSource(): Promise<SourceResult | null> {
+    const board = await fetchTgjuBoard();
+    return { quotes: this.midQuotesFromRates(board.rates), updatedAt: board.updatedAt };
+  }
+
+  /** ESTJT — official union, mid-only public source. */
+  private async fetchEstjtSource(): Promise<SourceResult | null> {
+    const board = await fetchEstjtBoard();
+    return { quotes: this.midQuotesFromRates(board.rates), updatedAt: board.updatedAt };
+  }
+
+  /** Map a public mid-only rate set (keyed by canonical rate key) into quotes. */
+  private midQuotesFromRates(rates: Map<string, number>): Record<string, Quote> {
+    const quotes: Record<string, Quote> = {};
+    for (const [rateKey, price] of rates) {
+      const symbol = RATE_KEY_TO_SYMBOL[rateKey];
+      if (!symbol) continue;
+      if (!Number.isFinite(price) || price <= 0) continue;
+      // No synthetic spread — public sources only carry a mid price; the client
+      // applies its own fee model on top (a double spread would show three
+      // visibly different numbers on the board tile).
+      quotes[symbol] = { symbol, price: Math.round(price), buy: null, sell: null };
+    }
+    return quotes;
+  }
+
+  /**
+   * The trades-derived source — a price tick per symbol built from recent
+   * *filled* orders.
+   *
+   * Side semantics mirror the rest of the platform: a customer BUY fills at the
+   * shop's ask (`sell`), a customer SELL fills at the shop's bid (`buy`). So the
+   * most recent BUY order's price becomes this source's `sell`, the most recent
+   * SELL order's price becomes its `buy`, and the last trade (either side) is
+   * the mid `price`. Symbols with no recent trade are simply absent — the next
+   * source in the chain fills them.
+   *
+   * Config: `{ windowMs }` — how far back to look (default 24h).
+   */
+  private async fetchTradesSource(src: PriceSource): Promise<SourceResult | null> {
+    const cfg = this.parseConfig(src.config);
+    const windowMs = Number(cfg.windowMs) || 24 * 60 * 60 * 1000;
+    const since = new Date(Date.now() - windowMs);
+
+    const orders = await this.prisma.order.findMany({
+      where: { status: 'FILLED', createdAt: { gte: since } },
+      orderBy: { createdAt: 'desc' },
+      take: 1000,
+    });
+
+    // newest-first → the first BUY/SELL seen per symbol is the most recent.
+    const latest: Record<string, { buy?: number; sell?: number; price?: number }> = {};
+    for (const o of orders) {
+      if (!isTradeSymbol(o.symbol)) continue;
+      let e = latest[o.symbol];
+      if (!e) {
+        e = {};
+        latest[o.symbol] = e;
+      }
+      const p = Number(o.price);
+      if (!Number.isFinite(p) || p <= 0) continue;
+      if (o.side === 'BUY' && e.sell == null) e.sell = p; // customer buys → shop sells
+      if (o.side === 'SELL' && e.buy == null) e.buy = p; // customer sells → shop buys
+      if (e.price == null) e.price = p; // last trade (first in desc order)
+    }
+
+    const quotes: Record<string, Quote> = {};
+    for (const [symbol, e] of Object.entries(latest)) {
+      const price =
+        e.price ??
+        (e.buy != null && e.sell != null
+          ? Math.round((e.buy + e.sell) / 2)
+          : e.buy ?? e.sell ?? 0);
+      if (!Number.isFinite(price) || price <= 0) continue;
+      quotes[symbol] = {
+        symbol,
+        price: Math.round(price),
+        buy: e.buy != null ? Math.round(e.buy) : null,
+        sell: e.sell != null ? Math.round(e.sell) : null,
+      };
+    }
+    return { quotes, updatedAt: Date.now() };
+  }
+
+  /**
+   * A manual source — per-symbol prices typed in by a super admin, stored in
+   * the source's `config` JSON as `{ prices: { GOLD18: { price, buy, sell }, … } }`.
+   * It feeds the board like any other source; combined with priority it can
+   * fully override the live feed for chosen symbols.
+   */
+  private async fetchManualSource(src: PriceSource): Promise<SourceResult | null> {
+    const cfg = this.parseConfig(src.config);
+    const prices = cfg.prices;
+    const quotes: Record<string, Quote> = {};
+    if (!prices || typeof prices !== 'object') return { quotes, updatedAt: Date.now() };
+
+    for (const [symbol, val] of Object.entries(prices as Record<string, any>)) {
+      if (!isTradeSymbol(symbol)) continue;
+      const v = val ?? {};
+      const buy = v.buy != null ? Math.round(Number(v.buy)) : null;
+      const sell = v.sell != null ? Math.round(Number(v.sell)) : null;
+      const explicit = v.price != null ? Math.round(Number(v.price)) : null;
+      if (buy == null && sell == null && explicit == null) continue;
+      const price =
+        explicit ??
+        (buy != null && sell != null ? Math.round((buy + sell) / 2) : buy ?? sell ?? 0);
+      quotes[symbol] = { symbol, price, buy, sell, manual: true };
+    }
+    return { quotes, updatedAt: Date.now() };
+  }
+
+  // ── Tick recorder & queries (super-admin live chart) ─────────────────────
+
+  /**
+   * Sample every enabled source and write a price tick per (source, symbol).
+   * Each source goes through the shared per-source cache, so a 20s cadence does
+   * not re-fetch an upstream more than once per CACHE_TTL_MS. Identical flat
+   * ticks are skipped when the last write was recent, so a quiet market does
+   * not bloat the table.
+   */
+  private async recordAllSources(): Promise<void> {
+    const sources = await this.loadSources();
+    const perSource: Record<string, Record<string, Quote>> = {};
+    for (const src of sources) {
+      const qs = await this.getSourceQuotes(src);
+      if (qs && Object.keys(qs).length > 0) perSource[src.name] = qs;
+    }
+
+    const now = Date.now();
+    const rows: Prisma.PriceTickCreateManyInput[] = [];
+    for (const [sourceName, qs] of Object.entries(perSource)) {
+      for (const [symbol, q] of Object.entries(qs)) {
+        const key = `${sourceName}|${symbol}`;
+        const seen = this.lastTickSeen.get(key);
+        const changed = !seen || seen.price !== q.price;
+        if (!changed && seen && now - seen.at < 30_000) continue; // skip identical flat tick
+        rows.push({
+          symbol,
+          source: sourceName,
+          price: q.price,
+          buy: q.buy,
+          sell: q.sell,
+          recordedAt: new Date(now),
+        });
+        this.lastTickSeen.set(key, { price: q.price, at: now });
+      }
+    }
+    if (!rows.length) return;
+    try {
+      await this.prisma.priceTick.createMany({ data: rows });
+    } catch (err) {
+      this.logger.warn(`tick record failed: ${String(err)}`);
+    }
+  }
+
+  /** Delete ticks older than the retention window. */
+  private async pruneTicks(): Promise<void> {
+    const cutoff = new Date(Date.now() - TICK_RETENTION_MS);
+    try {
+      await this.prisma.priceTick.deleteMany({ where: { recordedAt: { lt: cutoff } } });
+    } catch (err) {
+      this.logger.warn(`tick prune failed: ${String(err)}`);
+    }
+  }
+
+  private rangeToMs(range?: string): number {
+    switch (range) {
+      case '1h':
+        return 60 * 60 * 1000;
+      case '7d':
+        return 7 * 24 * 60 * 60 * 1000;
+      case '30d':
+        return 30 * 24 * 60 * 60 * 1000;
+      case '24h':
+      default:
+        return 24 * 60 * 60 * 1000;
+    }
+  }
+
+  /**
+   * Price-tick history for the super-admin live chart, filtered by symbol and/or
+   * source and limited to a time range. Ordered oldest-first so the chart plots
+   * left→right.
+   */
+  async getTicks(opts: { symbol?: string; source?: string; range?: string }): Promise<PriceTickView[]> {
+    const where: Prisma.PriceTickWhereInput = {
+      recordedAt: { gte: new Date(Date.now() - this.rangeToMs(opts.range)) },
+    };
+    if (opts.symbol) where.symbol = opts.symbol;
+    if (opts.source) where.source = opts.source;
+
+    const rows = await this.prisma.priceTick.findMany({
+      where,
+      orderBy: { recordedAt: 'asc' },
+      take: 5000,
+    });
+
+    return rows.map(r => ({
+      symbol: r.symbol,
+      source: r.source,
+      price: Number(r.price),
+      buy: r.buy == null ? null : Number(r.buy),
+      sell: r.sell == null ? null : Number(r.sell),
+      at: r.recordedAt instanceof Date ? r.recordedAt.getTime() : new Date(r.recordedAt as any).getTime(),
+    }));
+  }
+
+  /** Every source row (enabled or not) with live health, for the admin UI. */
+  async listSources(): Promise<SourceView[]> {
+    const rows = await this.prisma.priceSource.findMany({
+      orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
+    });
+    return rows.map(r => this.sourceView(r));
+  }
+
+  private sourceView(r: PriceSource): SourceView {
+    const hit = this.sourceCache.get(r.name);
+    return {
+      id: r.id,
+      name: r.name,
+      kind: r.kind,
+      enabled: r.enabled,
+      priority: r.priority,
+      isSystem: r.isSystem,
+      note: r.note ?? '',
+      config: this.redactConfig(r.config),
+      health: { fresh: !!hit, updatedAt: hit ? hit.updatedAt : null },
+      updatedAt: r.updatedAt,
+    };
+  }
+
+  /** Parsed config with any secret-looking keys stripped before it leaves the API. */
+  private redactConfig(config: string | null | undefined): Record<string, unknown> {
+    const cfg = this.parseConfig(config);
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(cfg)) {
+      if (/token|password|secret|uid|apikey|api_key/i.test(k)) continue;
+      out[k] = v;
+    }
+    return out;
   }
 
   // ── Manual (broker-manager) overrides ──────────────────────────────────

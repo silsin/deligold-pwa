@@ -731,3 +731,55 @@ model Notification {
   @@index([userId, createdAt])
   @@index([userId, read])
 }
+
+// ── Price sources & tick history (super-admin) ─────────────────────────────
+
+/// A price source the board can consult.
+///
+/// Built-in code-driven sources (akbari/tgju/estjt/trades) are seeded with
+/// `isSystem = true` and cannot be deleted — a super admin can still toggle,
+/// reprioritise and configure them. A super admin can also create new
+/// `manual` sources whose per-symbol prices live in `config`.
+///
+/// `priority` (lower = first) drives the order of the board fallback chain:
+/// each enabled source fills the symbols the higher-priority sources missed
+/// (first source wins per symbol), so a single outage never blanks the board.
+model PriceSource {
+  id        String   @id @default(uuid())
+  /// Human name shown in the admin UI; also the key ticks are stored under.
+  name      String   @unique
+  /// akbari | tgju | estjt | trades | manual
+  kind      String
+  enabled   Boolean  @default(true)
+  /// Lower = consulted first. Drives the order of the board fallback chain.
+  priority  Int      @default(100)
+  /// JSON string of source params: trades window, manual per-symbol prices,
+  /// akbari credential override, etc. Stored as text so SQLite needs no Json type.
+  config    String   @default("{}")
+  /// True for seeded built-in sources — cannot be deleted, only toggled.
+  isSystem  Boolean  @default(false)
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([enabled, priority])
+}
+
+/// One sampled reading from one source for one symbol.
+///
+/// The super-admin live chart reads these; the recorder writes one per
+/// (source, symbol) on a short tick. Pruned to a retention window so the
+/// table stays bounded.
+model PriceTick {
+  id        String   @id @default(uuid())
+  symbol    String
+  /// Source name, matching `PriceSource.name`.
+  source    String
+  price     Decimal
+  buy       Decimal?
+  sell      Decimal?
+  recordedAt DateTime
+
+  @@index([symbol, source, recordedAt])
+  @@index([source, recordedAt])
+}

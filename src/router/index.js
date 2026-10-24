@@ -23,6 +23,8 @@ const JoinView = () => import('../views/JoinView.vue')
 const StoreSetupView = () => import('../views/StoreSetupView.vue')
 const PricingRulesView = () => import('../views/PricingRulesView.vue')
 const NotificationsView = () => import('../views/NotificationsView.vue')
+const SourcesView = () => import('../views/SourcesView.vue')
+const TradesView = () => import('../views/TradesView.vue')
 
 /**
  * Live gold/silver trading app. Home is the price board (خرید/فروش quotes),
@@ -70,6 +72,10 @@ const routes = [
   // User directory + role grants — super-admin only (managers/admins can't
   // mint roles at or above their own, so they get no UI for it).
   { path: '/users', name: 'users', component: UsersView, meta: { title: 'کاربران', requiresAuth: true, roles: [ROLES.SUPER_ADMIN] } },
+  // Super-admin price source management + live price-tick chart.
+  { path: '/sources', name: 'sources', component: SourcesView, meta: { title: 'منابع قیمت', requiresAuth: true, roles: [ROLES.SUPER_ADMIN] } },
+  // Super-admin cross-platform trade explorer.
+  { path: '/trades', name: 'trades', component: TradesView, meta: { title: 'معاملات سامانه', requiresAuth: true, roles: [ROLES.SUPER_ADMIN] } },
   // Shown when an authenticated user lacks the role for a route.
   { path: '/forbidden', name: 'forbidden', component: ForbiddenView, meta: { title: 'دسترسی ندارید', requiresAuth: true } },
   // Customer store view — no auth required.

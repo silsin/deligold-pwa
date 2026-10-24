@@ -110,6 +110,12 @@
             <button v-if="auth.isSuperAdmin" type="button" class="drawer__item" @click="go('/users')">
               <i class="material-icons">group</i> کاربران
             </button>
+            <button v-if="auth.isSuperAdmin" type="button" class="drawer__item" @click="go('/sources')">
+              <i class="material-icons">insights</i> منابع قیمت
+            </button>
+            <button v-if="auth.isSuperAdmin" type="button" class="drawer__item" @click="go('/trades')">
+              <i class="material-icons">receipt_long</i> معاملات سامانه
+            </button>
           </template>
 
           <button v-if="auth.isLoggedIn" type="button" class="drawer__item drawer__item--out" @click="logout">
