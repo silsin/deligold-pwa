@@ -16,11 +16,23 @@
             <option value="">همه منابع</option>
             <option v-for="s in sources.sources" :key="s.name" :value="s.name">{{ s.name }}</option>
           </select>
-          <select v-model="range" class="sv__select sv__select--sm" @change="refreshTicks">
+          <select v-model="timeframe" class="sv__select sv__select--sm" title="تایم‌فریم کندل">
+            <option value="60000">۱ دقیقه</option>
+            <option value="300000">۵ دقیقه</option>
+            <option value="900000">۱۵ دقیقه</option>
+            <option value="3600000">۱ ساعت</option>
+            <option value="86400000">۱ روز</option>
+          </select>
+          <select v-model="range" class="sv__select sv__select--sm" @change="refreshTicks" title="بازه زمانی">
             <option value="1h">۱ ساعت</option>
             <option value="24h">۲۴ ساعت</option>
             <option value="7d">۷ روز</option>
             <option value="30d">۳۰ روز</option>
+          </select>
+          <select v-model="field" class="sv__select sv__select--sm" title="نوع قیمت">
+            <option value="price">میانگین</option>
+            <option value="sell">Ask</option>
+            <option value="buy">Bid</option>
           </select>
         </div>
         <div class="sv__last">
@@ -31,8 +43,8 @@
       </div>
 
       <div class="sv__chartwrap">
-        <PriceChart :ticks="chartTicks" :range="range" mode="line" />
-        <div v-if="!chartTicks.length" class="sv__empty">داده‌ای برای نمایش وجود ندارد — منتظر اولین تیک‌ها…</div>
+        <PriceChart :candles="candles" :range="range" mode="candle" />
+        <div v-if="!candles.length" class="sv__empty">داده‌ای برای نمایش وجود ندارد — منتظر اولین تیک‌ها…</div>
       </div>
 
       <div v-if="latestPerSource.length" class="sv__readings">
@@ -178,6 +190,8 @@ const sources = useSourcesStore()
 const symbol = ref('GOLD18')
 const source = ref('')
 const range = ref('24h')
+const timeframe = ref(300000) // candle size in ms (default 5m)
+const field = ref('price') // which quote side to chart: price | sell | buy
 const showAdd = ref(false)
 const saving = ref(false)
 const addError = ref('')
@@ -193,28 +207,56 @@ const configPlaceholder = computed(() =>
     : '{"prices": {"GOLD18": {"price": 26000000, "buy": 25900000, "sell": 26100000}}}'
 )
 
+/**
+ * The ticks that feed the chart, narrowed to the chosen source and field.
+ * The API returns ticks ascending by time, so the first value in a bucket is
+ * the open and the last is the close.
+ */
 const chartTicks = computed(() => {
-  const filtered = source.value
-    ? sources.ticks.filter(t => t.source === source.value)
-    : sources.ticks
-  // Deduplicate by source so "all sources" plots one line per source is not
-  // supported by the single-line chart; when no source is selected we show the
-  // first source that has data so the chart still renders.
-  return (filtered.length ? filtered : sources.ticks).map(t => ({ at: t.at, price: t.price }))
+  const all = Array.isArray(sources.ticks) ? sources.ticks : []
+  const rows = source.value ? all.filter(t => t.source === source.value) : all
+  const get = t => {
+    const v = Number(t[field.value] ?? t.price)
+    return Number.isFinite(v) && v > 0 ? v : null
+  }
+  return rows.map(t => ({ at: t.at, v: get(t) })).filter(r => r.v != null)
+})
+
+/**
+ * MetaTrader-style OHLC candles: ticks bucketed by the chosen timeframe.
+ * Each bucket → { t (bucket start), o (first), h (high), l (low), c (last) }.
+ * The PriceChart's candle mode reads exactly these fields.
+ */
+const candles = computed(() => {
+  const intervalMs = Number(timeframe.value) || 60000
+  const buckets = new Map()
+  for (const { at, v } of chartTicks.value) {
+    const bucket = Math.floor(Number(at) / intervalMs) * intervalMs
+    let c = buckets.get(bucket)
+    if (!c) {
+      c = { t: bucket, o: v, h: v, l: v, c: v }
+      buckets.set(bucket, c)
+    } else {
+      c.c = v
+      if (v > c.h) c.h = v
+      if (v < c.l) c.l = v
+    }
+  }
+  return [...buckets.values()].sort((a, b) => a.t - b.t)
 })
 
 const lastPrice = computed(() => {
   const list = chartTicks.value
-  return list.length ? list[list.length - 1].price : 0
+  return list.length ? list[list.length - 1].v : 0
 })
 const lastTime = computed(() => {
   const list = chartTicks.value
   return list.length ? list[list.length - 1].at : 0
 })
 const lastDir = computed(() => {
-  const list = chartTicks.value
+  const list = candles.value
   if (list.length < 2) return ''
-  return list[list.length - 1].price >= list[list.length - 2].price ? 'is-up' : 'is-down'
+  return list[list.length - 1].c >= list[list.length - 2].c ? 'is-up' : 'is-down'
 })
 
 /** Latest reading per source, for the "current selected source" readings strip. */
