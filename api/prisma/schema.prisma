@@ -783,3 +783,27 @@ model PriceTick {
   @@index([symbol, source, recordedAt])
   @@index([source, recordedAt])
 }
+
+// ── Chart annotations (super-admin drawings) ───────────────────────────────
+
+/// A drawing a super admin placed on the live price chart — a trend line, a
+/// horizontal price level, or a price-guess projection. Persisted so drawings
+/// survive reloads. Scoped by symbol (and optionally by source).
+model ChartAnnotation {
+  id        String   @id @default(uuid())
+  symbol    String
+  /// Optional source scoping; null = applies on the chart for any source.
+  source    String?
+  /// trendline | hline | projection
+  kind      String
+  /// JSON array of points: [{ x: <epoch ms>, y: <price> }]. trendline has two,
+  /// hline/projection have one.
+  points    String
+  color     String?
+  label     String?
+  createdById String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([symbol, source])
+}

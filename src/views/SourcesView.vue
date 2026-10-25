@@ -9,7 +9,7 @@
     <section class="sv__card sv__chart-card">
       <div class="sv__chart-head">
         <div class="sv__selectors">
-          <select v-model="symbol" class="sv__select" @change="refreshTicks">
+          <select v-model="symbol" class="sv__select" @change="onSymbolChange">
             <option v-for="s in sources.symbols" :key="s.symbol" :value="s.symbol">{{ s.name }}</option>
           </select>
           <select v-model="source" class="sv__select" @change="refreshTicks">
@@ -42,8 +42,29 @@
         </div>
       </div>
 
+      <div class="sv__drawbar">
+        <button type="button" class="sv__drawbtn" :class="{ 'is-active': drawMode === 'none' }" @click="drawMode = 'none'">
+          <i class="material-icons">arrow_selector_tool</i> انتخاب
+        </button>
+        <button type="button" class="sv__drawbtn" :class="{ 'is-active': drawMode === 'trendline' }" @click="startDraw('trendline')">
+          <i class="material-icons">show_chart</i> خط روند
+        </button>
+        <button type="button" class="sv__drawbtn" :class="{ 'is-active': drawMode === 'hline' }" @click="startDraw('hline')">
+          <i class="material-icons">horizontal_rule</i> سطح
+        </button>
+        <button type="button" class="sv__drawbtn" :class="{ 'is-active': drawMode === 'projection' }" @click="startDraw('projection')">
+          <i class="material-icons">flag</i> حدس قیمت
+        </button>
+        <button type="button" class="sv__drawbtn sv__drawbtn--danger" @click="clearDrawings">
+          <i class="material-icons">delete_sweep</i> پاک‌کردن
+        </button>
+        <span class="sv__drawcount">{{ toFa(sources.annotations.length) }} رسم</span>
+      </div>
+
       <div class="sv__chartwrap">
-        <PriceChart :candles="candles" :range="range" mode="candle" />
+        <PriceChart :candles="candles" :range="range" mode="candle"
+          :draw-mode="drawMode" :annotations="sources.annotations"
+          @annotate="onAnnotate" />
         <div v-if="!candles.length" class="sv__empty">داده‌ای برای نمایش وجود ندارد — منتظر اولین تیک‌ها…</div>
       </div>
 
@@ -75,6 +96,7 @@
           <select v-model="form.kind" class="sv__select">
             <option value="manual">دستی (قیمت ثابت)</option>
             <option value="trades">مشتق از معاملات</option>
+            <option value="composite">ترکیبی (از چند منبع)</option>
           </select>
         </label>
         <label class="sv__field">
@@ -161,11 +183,72 @@
           <label class="sv__field"><span>اولویت</span>
             <input v-model.number="editing.priority" type="number" min="0" class="sv__input" />
           </label>
-          <label class="sv__field sv__field--full"><span>پیکربندی (JSON)</span>
-            <textarea v-model="editing.config" rows="5" class="sv__input"></textarea>
-          </label>
-          <label class="sv__field sv__field--full"><span>یادداشت</span>
+          <label class="sv__field"><span>یادداشت</span>
             <input v-model="editing.note" type="text" class="sv__input" />
+          </label>
+
+          <!-- Composite config -->
+          <template v-if="editing.kind === 'composite'">
+            <label class="sv__field"><span>فرمول ترکیب</span>
+              <select v-model="editing.formula" class="sv__input">
+                <option value="avg">میانگین</option>
+                <option value="weighted">وزن‌دار</option>
+                <option value="median">میانه</option>
+                <option value="max">بیشینه</option>
+                <option value="min">کمینه</option>
+              </select>
+            </label>
+            <div class="sv__field sv__field--full">
+              <span>منابع ورودی</span>
+              <div class="sv__checks">
+                <label v-for="s in otherSources(editing.id)" :key="s.name" class="sv__check">
+                  <input type="checkbox" :value="s.name" v-model="editing.inputs" />
+                  <span>{{ s.name }}</span>
+                  <input v-if="editing.formula === 'weighted'" type="number" min="0" step="0.1"
+                    class="sv__winput" :placeholder="'وزن'" v-model.number="editing.weights[s.name]" />
+                </label>
+              </div>
+            </div>
+          </template>
+
+          <!-- Trades config -->
+          <label v-if="editing.kind === 'trades'" class="sv__field">
+            <span>پنجره معاملات (ساعت)</span>
+            <input v-model.number="editing.windowHours" type="number" min="1" class="sv__input" />
+          </label>
+
+          <!-- Manual config -->
+          <div v-if="editing.kind === 'manual'" class="sv__field sv__field--full">
+            <span>قیمت‌های دستی (هر نماد: قیمت / خرید / فروش)</span>
+            <div class="sv__prices">
+              <div v-for="sym in sources.symbols" :key="sym.symbol" class="sv__price-row">
+                <span class="sv__price-sym">{{ sym.short }}</span>
+                <input type="number" class="sv__input" placeholder="قیمت" v-model.number="editing.manualPrices[sym.symbol].price" />
+                <input type="number" class="sv__input" placeholder="خرید" v-model.number="editing.manualPrices[sym.symbol].buy" />
+                <input type="number" class="sv__input" placeholder="فروش" v-model.number="editing.manualPrices[sym.symbol].sell" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Tick-control rules (all kinds) -->
+          <div class="sv__field sv__field--full sv__rules">
+            <span>قوانین کنترل تیک (دلخواه)</span>
+            <div class="sv__rules-grid">
+              <label class="sv__rule">حد بالا
+                <input type="number" class="sv__input" placeholder="—" v-model.number="editing.rules.clampMax" />
+              </label>
+              <label class="sv__rule">حد پایین
+                <input type="number" class="sv__input" placeholder="—" v-model.number="editing.rules.clampMin" />
+              </label>
+              <label class="sv__rule">حد جهش (٪)
+                <input type="number" class="sv__input" placeholder="—" v-model.number="editing.rules.maxDevPct" />
+              </label>
+            </div>
+            <small class="sv__hint">حد جهش: تیک‌هایی که بیش از این درصد تغییر کنند رد می‌شوند (فیلتر نوسان).</small>
+          </div>
+
+          <label class="sv__field sv__field--full"><span>پیکربندی پیشرفته (JSON — جایگزین فیلدها)</span>
+            <textarea v-model="editing.rawConfig" rows="4" class="sv__input" :placeholder="configPlaceholder"></textarea>
           </label>
         </div>
         <footer class="sv__sheet-foot">
@@ -192,6 +275,7 @@ const source = ref('')
 const range = ref('24h')
 const timeframe = ref(300000) // candle size in ms (default 5m)
 const field = ref('price') // which quote side to chart: price | sell | buy
+const drawMode = ref('none') // none | trendline | hline | projection
 const showAdd = ref(false)
 const saving = ref(false)
 const addError = ref('')
@@ -282,7 +366,12 @@ const latestPerSource = computed(() => {
 })
 
 function kindLabel(k) {
-  return { akbari: 'اکبری', tgju: 'تی‌جی‌جو', estjt: 'اتحاد', trades: 'معاملات', manual: 'دستی' }[k] || k
+  return { akbari: 'اکبری', tgju: 'تی‌جی‌جو', estjt: 'اتحاد', trades: 'معاملات', manual: 'دستی', composite: 'ترکیبی' }[k] || k
+}
+
+/** Other sources available as composite inputs (not the one being edited). */
+function otherSources(excludeId) {
+  return sources.sources.filter(s => s.id !== excludeId)
 }
 
 async function refreshTicks() {
@@ -290,7 +379,11 @@ async function refreshTicks() {
 }
 
 async function refreshAll() {
-  await Promise.all([sources.fetchSources(), refreshTicks()])
+  await Promise.all([sources.fetchSources(), refreshTicks(), sources.fetchAnnotations(symbol.value)])
+}
+
+async function onSymbolChange() {
+  await Promise.all([refreshTicks(), sources.fetchAnnotations(symbol.value)])
 }
 
 async function submitAdd() {
@@ -321,22 +414,77 @@ async function submitAdd() {
   }
 }
 
+/** Build an empty manual-prices map for every symbol. */
+function emptyManualPrices() {
+  const out = {}
+  for (const s of sources.symbols) out[s.symbol] = { price: null, buy: null, sell: null }
+  return out
+}
+
 function openEdit(s) {
+  const cfg = (s.config && typeof s.config === 'object') ? s.config : {}
+  const rules = cfg.rules || {}
   editing.value = {
     id: s.id,
     name: s.name,
+    kind: s.kind,
     priority: s.priority,
-    config: JSON.stringify(s.config, null, 2),
     note: s.note || '',
+    formula: cfg.formula || 'avg',
+    inputs: Array.isArray(cfg.inputs) ? [...cfg.inputs] : [],
+    weights: { ...(cfg.weights || {}) },
+    windowHours: cfg.windowMs ? Math.round(Number(cfg.windowMs) / 3_600_000) : 24,
+    manualPrices: cfg.prices && typeof cfg.prices === 'object'
+      ? { ...emptyManualPrices(), ...cfg.prices }
+      : emptyManualPrices(),
+    rules: {
+      clampMin: rules.clampMin ?? null,
+      clampMax: rules.clampMax ?? null,
+      maxDevPct: rules.maxDevPct ?? null,
+    },
+    rawConfig: '',
   }
   editError.value = ''
+}
+
+/** Rebuild the source config object from the structured edit fields. */
+function buildConfigFromEdit() {
+  const e = editing.value
+  // Advanced override wins when the user typed something there.
+  if (e.rawConfig && e.rawConfig.trim()) {
+    try { return JSON.parse(e.rawConfig) }
+    catch { throw new Error('پیکربندی JSON معتبر نیست') }
+  }
+  const cfg = {}
+  if (e.kind === 'composite') {
+    cfg.formula = e.formula
+    cfg.inputs = e.inputs
+    if (e.formula === 'weighted') cfg.weights = e.weights
+  } else if (e.kind === 'trades') {
+    if (e.windowHours) cfg.windowMs = Math.max(1, Number(e.windowHours)) * 3_600_000
+  } else if (e.kind === 'manual') {
+    const prices = {}
+    for (const [sym, v] of Object.entries(e.manualPrices)) {
+      if (v.price != null || v.buy != null || v.sell != null) prices[sym] = { ...v }
+    }
+    cfg.prices = prices
+  }
+  const r = e.rules || {}
+  if (r.clampMin != null || r.clampMax != null || r.maxDevPct != null) {
+    cfg.rules = {
+      clampMin: r.clampMin ?? null,
+      clampMax: r.clampMax ?? null,
+      maxDevPct: r.maxDevPct ?? null,
+    }
+  }
+  return cfg
 }
 
 async function saveEdit() {
   editError.value = ''
   let config
-  try { config = editing.value.config.trim() ? JSON.parse(editing.value.config) : undefined }
-  catch { editError.value = 'پیکربندی JSON معتبر نیست'; return }
+  try { config = buildConfigFromEdit() }
+  catch (e) { editError.value = e.message; return }
   saving.value = true
   try {
     await sources.updateSource(editing.value.id, {
@@ -379,9 +527,31 @@ async function remove(s) {
   catch (e) { alert(e.message || 'حذف ناموفق بود') }
 }
 
+// ── Chart drawing (MetaTrader-style) ───────────────────────────────────────
+function startDraw(mode) {
+  drawMode.value = drawMode.value === mode ? 'none' : mode
+}
+
+async function onAnnotate(payload) {
+  try {
+    await sources.createAnnotation({ symbol: symbol.value, ...payload })
+    await sources.fetchAnnotations(symbol.value)
+  } catch (e) { /* ignore */ }
+}
+
+async function clearDrawings() {
+  if (!sources.annotations.length) { drawMode.value = 'none'; return }
+  if (!confirm('حذف همه رسم‌های این نماد؟')) return
+  for (const a of sources.annotations) {
+    try { await sources.deleteAnnotation(a.id) } catch { /* ignore */ }
+  }
+  await sources.fetchAnnotations(symbol.value)
+  drawMode.value = 'none'
+}
+
 onMounted(async () => {
   await sources.fetchSources()
-  await refreshTicks()
+  await Promise.all([refreshTicks(), sources.fetchAnnotations(symbol.value)])
   sources.startTickPolling(() => {
     refreshTicks()
     sources.fetchSources()
@@ -542,4 +712,29 @@ textarea.sv__input { resize: vertical; font-family: monospace; }
 }
 .sv__sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .sv__sheet-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 8px; }
+
+.sv__drawbar { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-bottom: 10px; }
+.sv__drawbtn {
+  display: inline-flex; align-items: center; gap: 5px; padding: 7px 11px; border-radius: 9px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  font-size: 12px; font-weight: 700; cursor: pointer;
+}
+.sv__drawbtn i { font-size: 16px; }
+.sv__drawbtn.is-active { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.sv__drawbtn--danger { color: var(--down); margin-right: auto; }
+.sv__drawcount { font-size: 11px; color: var(--text-muted); }
+
+.sv__checks { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.sv__check { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 5px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.sv__check span { flex: 1; }
+.sv__winput { width: 70px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 5px 7px; font-size: 12px; }
+
+.sv__prices { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.sv__price-row { display: grid; grid-template-columns: 70px 1fr 1fr 1fr; gap: 6px; align-items: center; }
+.sv__price-sym { font-size: 12px; font-weight: 700; color: var(--text-muted); }
+
+.sv__rules { margin-top: 4px; }
+.sv__rules-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 4px; }
+.sv__rule { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--text-muted); }
+.sv__hint { font-size: 10.5px; color: var(--text-muted); margin-top: 4px; }
 </style>

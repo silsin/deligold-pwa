@@ -63,6 +63,43 @@ export const useSourcesStore = defineStore('sources', () => {
     ticks.value = Array.isArray(data) ? data : []
   }
 
+  // ── Tick history & moderation ─────────────────────────────────────────────
+  async function fetchTickHistory(filters = {}) {
+    const params = new URLSearchParams()
+    for (const [k, v] of Object.entries(filters)) {
+      if (v !== undefined && v !== null && v !== '') params.set(k, v)
+    }
+    const data = await api.get(`/superadmin/ticks/history?${params.toString()}`)
+    return data || { rows: [], total: 0 }
+  }
+  async function deleteTick(id) {
+    return api.delete(`/superadmin/ticks/${id}`)
+  }
+  async function clearTicks(payload) {
+    return api.post('/superadmin/ticks/clear', payload)
+  }
+
+  // ── Chart annotations (drawings) ────────────────────────────────────────
+  const annotations = ref([])
+  async function fetchAnnotations(symbol) {
+    const data = await api.get(`/superadmin/annotations?symbol=${encodeURIComponent(symbol)}`)
+    // points are stored as a JSON string server-side → parse to an array.
+    annotations.value = (Array.isArray(data) ? data : []).map(a => ({
+      ...a,
+      points: typeof a.points === 'string' ? safeParse(a.points) : a.points || [],
+    }))
+  }
+  async function createAnnotation(payload) {
+    return api.post('/superadmin/annotations', payload)
+  }
+  async function deleteAnnotation(id) {
+    return api.delete(`/superadmin/annotations/${id}`)
+  }
+
+  function safeParse(s) {
+    try { return JSON.parse(s) } catch { return [] }
+  }
+
   /** Start a polling loop that re-fetches ticks (and refreshes sources). */
   function startTickPolling(onTick, intervalMs = 8000) {
     stopTickPolling()
@@ -75,8 +112,10 @@ export const useSourcesStore = defineStore('sources', () => {
   }
 
   return {
-    sources, symbols, ticks, loading, error,
+    sources, symbols, ticks, loading, error, annotations,
     fetchSources, createSource, updateSource, deleteSource, reorderSources,
     fetchTicks, startTickPolling, stopTickPolling,
+    fetchTickHistory, deleteTick, clearTicks,
+    fetchAnnotations, createAnnotation, deleteAnnotation,
   }
 })

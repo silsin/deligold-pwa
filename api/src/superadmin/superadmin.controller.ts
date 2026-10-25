@@ -91,4 +91,67 @@ export class SuperadminController {
   brokers() {
     return this.sa.listBrokers();
   }
+
+  // ── Tick history & moderation ────────────────────────────────────────────
+
+  /** Paginated, filterable tick history. */
+  @Get('ticks/history')
+  ticksHistory(
+    @Query('symbol') symbol?: string,
+    @Query('source') source?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.sa.listTicksHistory({ symbol, source, from, to, limit, offset });
+  }
+
+  /** Delete a single recorded tick. */
+  @Delete('ticks/:id')
+  deleteTick(@Param('id') id: string) {
+    return this.sa.deleteTick(id);
+  }
+
+  /** Bulk-clear ticks by filter (symbol/source/before). */
+  @Post('ticks/clear')
+  clearTicks(@Body() body: { symbol?: string; source?: string; before?: string }) {
+    return this.sa.clearTicks(body ?? {});
+  }
+
+  // ── Chart annotations (super-admin drawings) ─────────────────────────────
+
+  /** Saved chart drawings for a symbol. */
+  @Get('annotations')
+  annotations(@Query('symbol') symbol?: string) {
+    return this.sa.listAnnotations(symbol);
+  }
+
+  /** Save a new drawing (trend line / horizontal level / price-guess). */
+  @Post('annotations')
+  createAnnotation(
+    @Body() body: {
+      symbol: string;
+      source?: string | null;
+      kind: string;
+      points: Array<{ x: number; y: number }>;
+      color?: string | null;
+      label?: string | null;
+    },
+  ) {
+    return this.sa.createAnnotation('superadmin', body);
+  }
+
+  @Patch('annotations/:id')
+  updateAnnotation(
+    @Param('id') id: string,
+    @Body() body: Partial<{ points: Array<{ x: number; y: number }>; color: string | null; label: string | null }>,
+  ) {
+    return this.sa.updateAnnotation(id, body ?? {});
+  }
+
+  @Delete('annotations/:id')
+  deleteAnnotation(@Param('id') id: string) {
+    return this.sa.deleteAnnotation(id);
+  }
 }

@@ -539,6 +539,8 @@ export class MarketService implements OnModuleInit, OnModuleDestroy {
         return this.fetchTradesSource(src);
       case 'manual':
         return this.fetchManualSource(src);
+      case 'composite':
+        return this.fetchCompositeSource(src);
       default:
         return null;
     }
@@ -562,8 +564,14 @@ export class MarketService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (res && Object.keys(res.quotes).length > 0) {
-      this.sourceCache.set(src.name, res);
-      return res.quotes;
+      const ruled = this.applySourceRules(src, res.quotes);
+      if (Object.keys(ruled).length > 0) {
+        const result: SourceResult = { quotes: ruled, updatedAt: res.updatedAt };
+        this.sourceCache.set(src.name, result);
+        return result.quotes;
+      }
+      // Every reading was rejected by the rules → keep the previous cached one.
+      return hit ? hit.quotes : null;
     }
     return hit ? hit.quotes : null;
   }
@@ -689,6 +697,132 @@ export class MarketService implements OnModuleInit, OnModuleDestroy {
       quotes[symbol] = { symbol, price, buy, sell, manual: true };
     }
     return { quotes, updatedAt: Date.now() };
+  }
+
+  // ── Composite source & tick-control rules ───────────────────────────────
+
+  /**
+   * A composite source combines several other sources into one price per
+   * symbol — so a super admin can define new prices from existing feeds.
+   * Config:
+   *   { formula: 'avg'|'median'|'weighted'|'max'|'min',
+   *     inputs: ['akbari','tgju', …],
+   *     weights: { akbari: 1, tgju: 2 } }   // 'weighted' only
+   *
+   * Each input is read through the shared per-source cache; a source cannot
+   * reference itself (guard against cycles). A symbol missing from an input
+   * simply does not contribute to it. buy/sell are combined the same way when
+   * the inputs carry them.
+   */
+  private async fetchCompositeSource(src: PriceSource): Promise<SourceResult | null> {
+    const cfg = this.parseConfig(src.config);
+    const inputs: string[] = Array.isArray(cfg.inputs) ? (cfg.inputs as string[]) : [];
+    const usable = inputs.filter(n => typeof n === 'string' && n && n !== src.name);
+    if (!usable.length) return null;
+    const formula = (cfg.formula as string) || 'avg';
+    const weights =
+      cfg.weights && typeof cfg.weights === 'object' ? (cfg.weights as Record<string, number>) : {};
+
+    const rows = await this.prisma.priceSource.findMany({ where: { name: { in: usable } } });
+    const perInput: Record<string, Record<string, Quote>> = {};
+    for (const r of rows) {
+      const qs = await this.getSourceQuotes(r);
+      if (qs) perInput[r.name] = qs;
+    }
+
+    const symbols = new Set<string>();
+    for (const qs of Object.values(perInput)) for (const s of Object.keys(qs)) symbols.add(s);
+
+    const combine = (vals: number[]): number | null => {
+      if (!vals.length) return null;
+      if (formula === 'max') return Math.max(...vals);
+      if (formula === 'min') return Math.min(...vals);
+      if (formula === 'median') {
+        const s = [...vals].sort((a, b) => a - b);
+        const m = Math.floor(s.length / 2);
+        return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2);
+      }
+      return vals.reduce((a, b) => a + b, 0) / vals.length; // avg (and weighted falls back to plain avg)
+    };
+
+    const quotes: Record<string, Quote> = {};
+    for (const symbol of symbols) {
+      const mids: { name: string; v: number }[] = [];
+      const buys: number[] = [];
+      const sells: number[] = [];
+      for (const [name, qs] of Object.entries(perInput)) {
+        const q = qs[symbol];
+        if (!q) continue;
+        mids.push({ name, v: q.price });
+        if (q.buy != null) buys.push(q.buy);
+        if (q.sell != null) sells.push(q.sell);
+      }
+      if (!mids.length) continue;
+
+      let price: number;
+      if (formula === 'weighted') {
+        let wsum = 0;
+        let sum = 0;
+        for (const { name, v } of mids) {
+          const w = Number(weights[name]) || 1;
+          wsum += w;
+          sum += v * w;
+        }
+        price = wsum ? sum / wsum : mids[0].v;
+      } else {
+        price = combine(mids.map(m => m.v)) ?? mids[0].v;
+      }
+      quotes[symbol] = {
+        symbol,
+        price: Math.round(price),
+        buy: buys.length ? Math.round(combine(buys) ?? buys[0]) : null,
+        sell: sells.length ? Math.round(combine(sells) ?? sells[0]) : null,
+      };
+    }
+    return { quotes, updatedAt: Date.now() };
+  }
+
+  /**
+   * Tick-control rules applied to every source's raw quotes before they are
+   * cached, recorded or shown — a super admin's full control over what reaches
+   * the board and the history. Config `rules` block (works on any source):
+   *   { rules: { clampMin, clampMax, maxDevPct } }
+   * - maxDevPct: reject a symbol's new reading when it moves more than this
+   *   percent from the last cached reading (outlier/spike filter); the previous
+   *   value is kept instead.
+   * - clampMin/clampMax: hard floor/ceiling on the price and its sides.
+   */
+  private applySourceRules(src: PriceSource, quotes: Record<string, Quote>): Record<string, Quote> {
+    const cfg = this.parseConfig(src.config);
+    const rules = cfg.rules && typeof cfg.rules === 'object' ? (cfg.rules as Record<string, any>) : {};
+    const clampMin = rules.clampMin != null && rules.clampMin !== '' ? Number(rules.clampMin) : null;
+    const clampMax = rules.clampMax != null && rules.clampMax !== '' ? Number(rules.clampMax) : null;
+    const maxDevPct = rules.maxDevPct != null && rules.maxDevPct !== '' ? Number(rules.maxDevPct) : null;
+    if (clampMin == null && clampMax == null && maxDevPct == null) return quotes;
+
+    const prev = this.sourceCache.get(src.name)?.quotes ?? {};
+    const clamp = (v: number | null): number | null => {
+      if (v == null) return null;
+      let r = v;
+      if (clampMin != null && r < clampMin) r = clampMin;
+      if (clampMax != null && r > clampMax) r = clampMax;
+      return Math.round(r);
+    };
+
+    const out: Record<string, Quote> = {};
+    for (const [symbol, q] of Object.entries(quotes)) {
+      if (maxDevPct != null) {
+        const p = prev[symbol]?.price;
+        if (p && (Math.abs(q.price - p) / p) * 100 > maxDevPct) continue; // outlier → keep previous
+      }
+      out[symbol] = {
+        ...q,
+        price: clamp(q.price) ?? q.price,
+        buy: clamp(q.buy),
+        sell: clamp(q.sell),
+      };
+    }
+    return out;
   }
 
   // ── Tick recorder & queries (super-admin live chart) ─────────────────────

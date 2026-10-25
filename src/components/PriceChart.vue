@@ -4,12 +4,17 @@
       <canvas
         ref="canvas"
         class="chart__canvas"
+        :class="{ 'is-drawing': drawMode !== 'none' }"
         @pointermove="onPointerMove"
+        @pointerdown="onPointerDown"
         @pointerleave="onPointerLeave"
       ></canvas>
-      <div v-if="hover" class="chart__tooltip">
+      <div v-if="hover && drawMode === 'none'" class="chart__tooltip">
         <span class="chart__tooltip-time">{{ faAxisTime(hover.t, range) }}</span>
         <span class="chart__tooltip-val">{{ faMoney(hover.c) }}</span>
+      </div>
+      <div v-if="drawMode !== 'none'" class="chart__draw-hint">
+        {{ drawHint }}
       </div>
     </div>
     <div class="chart__yaxis">
@@ -30,16 +35,25 @@ const props = defineProps({
   ticks: { type: Array, default: () => [] },
   range: { type: String, default: '24h' },
   /** 'candle' | 'line' */
-  mode: { type: String, default: 'candle' }
+  mode: { type: String, default: 'candle' },
+  /** Drawing mode: 'none' | 'trendline' | 'hline' | 'projection' */
+  drawMode: { type: String, default: 'none' },
+  /** Persisted drawings: [{ id, kind, points: [{x,y}], color, label }] */
+  annotations: { type: Array, default: () => [] },
 })
+
+const emit = defineEmits(['annotate'])
 
 const canvas = ref(null)
 const hover = ref(null)
+/** In-progress trendline: first clicked point, or null when none. */
+const firstPoint = ref(null)
+/** Live preview of the shape being drawn (rendered until committed). */
+const draft = ref(null)
 const geometry = ref({ padL: 8, padR: 8, padT: 14, padB: 10, w: 0, h: 0 })
 let ctx = null
 let raf = null
 
-/** Colours come from the theme's CSS variables, so the chart follows the palette. */
 function cssVar(name, fallback) {
   const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
   return value || fallback
@@ -51,7 +65,8 @@ function palette() {
     down: cssVar('--down', '#ef4444'),
     upSoft: cssVar('--up-soft', 'rgba(38,166,91,.2)'),
     downSoft: cssVar('--down-soft', 'rgba(239,68,68,.2)'),
-    grid: cssVar('--border', '#2a2a2a')
+    grid: cssVar('--border', '#2a2a2a'),
+    accent: cssVar('--accent', '#d4af37'),
   }
 }
 
@@ -70,6 +85,14 @@ const bounds = computed(() => {
   return { min, max }
 })
 
+const drawHint = computed(() => {
+  if (props.drawMode === 'trendline')
+    return firstPoint.value ? 'نقطه دوم را بزنید' : 'نقطه اول خط را بزنید'
+  if (props.drawMode === 'hline') return 'برای رسم خط افقی بزنید'
+  if (props.drawMode === 'projection') return 'برای حدس قیمت بزنید'
+  return ''
+})
+
 const yTicks = computed(() => {
   const { min, max } = bounds.value
   if (!max) return []
@@ -85,7 +108,6 @@ const xTicks = computed(() => {
   for (let i = 0; i < list.length; i += step) out.push(faAxisTime(list[i].t, props.range))
   return out
 })
-
 
 function resize() {
   const c = canvas.value
@@ -113,12 +135,46 @@ function yFor(price) {
   return padT + ((max - price) / (max - min)) * usable
 }
 
+/** Y pixel → price (inverse of yFor, for drawing). */
+function priceForY(y) {
+  const { min, max } = bounds.value
+  const { padT, padB, h } = geometry.value
+  if (max === min) return (min + max) / 2
+  const usable = h - padT - padB
+  return max - ((y - padT) / usable) * (max - min)
+}
+
 /** Series index → X pixel. */
 function xFor(i, total) {
   const { padL, padR, w } = geometry.value
   const usable = w - padL - padR
   if (total <= 1) return padL + usable / 2
   return padL + (i / (total - 1)) * usable
+}
+
+/** Time (epoch ms) → X pixel, interpolated over the series time range. */
+function xForTime(t) {
+  const list = series.value
+  const { padL, padR, w } = geometry.value
+  const usable = w - padL - padR
+  if (list.length < 2) return padL + usable / 2
+  const tMin = list[0].t
+  const tMax = list[list.length - 1].t
+  if (tMax === tMin) return padL + usable / 2
+  const ratio = (t - tMin) / (tMax - tMin)
+  return padL + ratio * usable
+}
+
+/** X pixel → time (epoch ms). */
+function timeForX(x) {
+  const list = series.value
+  const { padL, padR, w } = geometry.value
+  const usable = w - padL - padR
+  if (list.length < 2) return list[0]?.t ?? Date.now()
+  const tMin = list[0].t
+  const tMax = list[list.length - 1].t
+  const ratio = (x - padL) / (usable || 1)
+  return Math.round(tMin + ratio * (tMax - tMin))
 }
 
 function drawGrid(p) {
@@ -148,7 +204,6 @@ function drawCandles(p) {
     const rising = candle.c >= candle.o
     const color = rising ? p.up : p.down
 
-    // Wick
     ctx.strokeStyle = color
     ctx.lineWidth = 1.5
     ctx.beginPath()
@@ -156,7 +211,6 @@ function drawCandles(p) {
     ctx.lineTo(x, yFor(candle.l))
     ctx.stroke()
 
-    // Body
     const yOpen = yFor(candle.o)
     const yClose = yFor(candle.c)
     const top = Math.min(yOpen, yClose)
@@ -177,7 +231,6 @@ function drawLine(p) {
   const color = rising ? p.up : p.down
   const { h, padB } = geometry.value
 
-  // Gradient area under the curve.
   ctx.beginPath()
   list.forEach((point, i) => {
     const x = xFor(i, list.length)
@@ -191,7 +244,6 @@ function drawLine(p) {
   ctx.fillStyle = rising ? p.upSoft : p.downSoft
   ctx.fill()
 
-  // The line itself.
   ctx.beginPath()
   list.forEach((point, i) => {
     const x = xFor(i, list.length)
@@ -204,7 +256,6 @@ function drawLine(p) {
   ctx.lineJoin = 'round'
   ctx.stroke()
 
-  // Last price marker.
   const x = xFor(list.length - 1, list.length)
   const y = yFor(last)
   ctx.fillStyle = color
@@ -213,22 +264,111 @@ function drawLine(p) {
   ctx.fill()
 }
 
+/** A horizontal price level (solid) or a price-guess projection (dashed). */
+function drawHLine(ann, p) {
+  if (!ann.points?.length) return
+  const { padL, padR, w } = geometry.value
+  const y = yFor(ann.points[0].y)
+  const isGuess = ann.kind === 'projection'
+  ctx.strokeStyle = ann.color || (isGuess ? '#f0a020' : p.accent)
+  ctx.lineWidth = 1.6
+  ctx.setLineDash(isGuess ? [6, 4] : [])
+  ctx.beginPath()
+  ctx.moveTo(padL, y)
+  ctx.lineTo(w - padR, y)
+  ctx.stroke()
+  ctx.setLineDash([])
+
+  const label = ann.label || `${isGuess ? 'حدس' : 'سطح'}: ${faMoney(ann.points[0].y)}`
+  ctx.font = '11px Vazirmatn, sans-serif'
+  ctx.fillStyle = ann.color || (isGuess ? '#f0a020' : p.accent)
+  ctx.textAlign = 'right'
+  ctx.fillText(label, w - padR - 4, y - 5)
+  ctx.textAlign = 'left'
+}
+
+/** A trend line between two price/time points. */
+function drawTrendLine(ann, p) {
+  if (!ann.points || ann.points.length < 2) return
+  const x1 = xForTime(ann.points[0].x)
+  const y1 = yFor(ann.points[0].y)
+  const x2 = xForTime(ann.points[1].x)
+  const y2 = yFor(ann.points[1].y)
+  ctx.strokeStyle = ann.color || p.accent
+  ctx.lineWidth = 1.8
+  ctx.beginPath()
+  ctx.moveTo(x1, y1)
+  ctx.lineTo(x2, y2)
+  ctx.stroke()
+}
+
+function drawAnnotations(p) {
+  for (const ann of props.annotations) {
+    if (ann.kind === 'trendline') drawTrendLine(ann, p)
+    else drawHLine(ann, p)
+  }
+  if (draft.value) {
+    const tmp = { kind: props.drawMode, points: draft.value }
+    if (props.drawMode === 'trendline') drawTrendLine(tmp, p)
+    else drawHLine(tmp, p)
+  }
+}
+
 function draw() {
   if (!ctx) return
   const p = palette()
   drawGrid(p)
   if (props.mode === 'line') drawLine(p)
   else drawCandles(p)
+  drawAnnotations(p)
 }
 
-/** Crosshair read-out: nearest point under the pointer. */
-function onPointerMove(event) {
-  const list = series.value
-  if (!list.length) return
+function pointerToPriceTime(event) {
   const rect = canvas.value.getBoundingClientRect()
   const x = event.clientX - rect.left
+  const y = event.clientY - rect.top
+  return { px: x, py: y, t: timeForX(x), price: priceForY(y) }
+}
+
+function onPointerDown(event) {
+  if (props.drawMode === 'none') return
+  const { px, py, t, price } = pointerToPriceTime(event)
+  const point = { x: t, y: Math.round(price) }
+
+  if (props.drawMode === 'trendline') {
+    if (!firstPoint.value) {
+      firstPoint.value = point
+      draft.value = [point, point]
+    } else {
+      draft.value = [firstPoint.value, point]
+      emit('annotate', { kind: 'trendline', points: [firstPoint.value, point] })
+      firstPoint.value = null
+      draft.value = null
+    }
+    return
+  }
+
+  // hline / projection — single click places the level.
+  const kind = props.drawMode === 'projection' ? 'projection' : 'hline'
+  emit('annotate', { kind, points: [point] })
+}
+
+function onPointerMove(event) {
+  if (props.drawMode !== 'none') {
+    if (props.drawMode === 'trendline' && firstPoint.value) {
+      const { t, price } = pointerToPriceTime(event)
+      draft.value = [firstPoint.value, { x: t, y: Math.round(price) }]
+      if (raf) cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(draw)
+    }
+    return
+  }
+  // Crosshair read-out (no drawing).
+  const list = series.value
+  if (!list.length) return
+  const { px } = pointerToPriceTime(event)
   const { padL, padR, w } = geometry.value
-  const ratio = (x - padL) / (w - padL - padR || 1)
+  const ratio = (px - padL) / (w - padL - padR || 1)
   const index = Math.round(ratio * (list.length - 1))
   const item = list[Math.max(0, Math.min(list.length - 1, index))]
   if (item) hover.value = { t: item.t, c: item.c }
@@ -239,7 +379,7 @@ function onPointerLeave() {
 }
 
 watch(
-  () => [props.candles, props.ticks, props.mode, props.range],
+  () => [props.candles, props.ticks, props.mode, props.range, props.annotations, props.drawMode, draft.value],
   () => {
     if (raf) cancelAnimationFrame(raf)
     raf = requestAnimationFrame(draw)
@@ -260,7 +400,6 @@ onBeforeUnmount(() => {
 })
 </script>
 
-
 <style scoped>
 .chart {
   display: flex;
@@ -280,6 +419,10 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 100%;
   touch-action: none;
+}
+
+.chart__canvas.is-drawing {
+  cursor: crosshair;
 }
 
 .chart__tooltip {
@@ -308,6 +451,20 @@ onBeforeUnmount(() => {
   font-variant-numeric: tabular-nums;
 }
 
+.chart__draw-hint {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  pointer-events: none;
+}
+
 .chart__yaxis {
   display: none;
 }
@@ -321,4 +478,3 @@ onBeforeUnmount(() => {
   font-variant-numeric: tabular-nums;
 }
 </style>
-

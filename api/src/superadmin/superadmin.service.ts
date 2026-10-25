@@ -229,4 +229,114 @@ export class SuperadminService {
       orderBy: { name: 'asc' },
     });
   }
+
+  // ── Tick history & moderation ────────────────────────────────────────────
+
+  /** Paginated, filterable tick history — every recorded reading. */
+  async listTicksHistory(opts: {
+    symbol?: string;
+    source?: string;
+    from?: string;
+    to?: string;
+    limit?: string;
+    offset?: string;
+  }): Promise<{ rows: any[]; total: number }> {
+    const where: Prisma.PriceTickWhereInput = {};
+    if (opts.symbol) where.symbol = opts.symbol;
+    if (opts.source) where.source = opts.source;
+    if (opts.from || opts.to) {
+      where.recordedAt = {};
+      if (opts.from) where.recordedAt.gte = new Date(opts.from);
+      if (opts.to) where.recordedAt.lte = new Date(opts.to);
+    }
+    const limit = Math.min(Number(opts.limit) || 100, 1000);
+    const offset = Math.max(0, Number(opts.offset) || 0);
+
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.priceTick.findMany({
+        where,
+        orderBy: { recordedAt: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
+      this.prisma.priceTick.count({ where }),
+    ]);
+
+    return {
+      rows: rows.map(r => ({
+        id: r.id,
+        symbol: r.symbol,
+        source: r.source,
+        price: Number(r.price),
+        buy: r.buy == null ? null : Number(r.buy),
+        sell: r.sell == null ? null : Number(r.sell),
+        at: r.recordedAt instanceof Date ? r.recordedAt.getTime() : new Date(r.recordedAt as any).getTime(),
+      })),
+      total,
+    };
+  }
+
+  /** Delete a single recorded tick (moderation). */
+  async deleteTick(id: string) {
+    await this.prisma.priceTick.delete({ where: { id } });
+    return { ok: true };
+  }
+
+  /** Bulk-clear ticks by filter (e.g. purge a noisy source's history). */
+  async clearTicks(opts: { symbol?: string; source?: string; before?: string }) {
+    const where: Prisma.PriceTickWhereInput = {};
+    if (opts.symbol) where.symbol = opts.symbol;
+    if (opts.source) where.source = opts.source;
+    if (opts.before) where.recordedAt = { lt: new Date(opts.before) };
+    const { count } = await this.prisma.priceTick.deleteMany({ where });
+    return { ok: true, count };
+  }
+
+  // ── Chart annotations (super-admin drawings) ─────────────────────────────
+
+  async listAnnotations(symbol?: string) {
+    const where = symbol ? { symbol } : {};
+    return this.prisma.chartAnnotation.findMany({
+      where,
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async createAnnotation(actorId: string, data: {
+    symbol: string;
+    source?: string | null;
+    kind: string;
+    points: Array<{ x: number; y: number }>;
+    color?: string | null;
+    label?: string | null;
+  }) {
+    return this.prisma.chartAnnotation.create({
+      data: {
+        symbol: data.symbol,
+        source: data.source ?? null,
+        kind: data.kind,
+        points: JSON.stringify(data.points ?? []),
+        color: data.color ?? null,
+        label: data.label ?? null,
+        createdById: actorId,
+      },
+    });
+  }
+
+  async updateAnnotation(id: string, data: Partial<{
+    points: Array<{ x: number; y: number }>;
+    color: string | null;
+    label: string | null;
+  }>) {
+    const update: Prisma.ChartAnnotationUpdateInput = {};
+    if (data.points) update.points = JSON.stringify(data.points);
+    if (data.color !== undefined) update.color = data.color;
+    if (data.label !== undefined) update.label = data.label;
+    return this.prisma.chartAnnotation.update({ where: { id }, data: update });
+  }
+
+  async deleteAnnotation(id: string) {
+    await this.prisma.chartAnnotation.delete({ where: { id } });
+    return { ok: true };
+  }
 }

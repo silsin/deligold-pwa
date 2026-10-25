@@ -25,6 +25,7 @@ const PricingRulesView = () => import('../views/PricingRulesView.vue')
 const NotificationsView = () => import('../views/NotificationsView.vue')
 const SourcesView = () => import('../views/SourcesView.vue')
 const TradesView = () => import('../views/TradesView.vue')
+const TickHistoryView = () => import('../views/TickHistoryView.vue')
 
 /**
  * Live gold/silver trading app. Home is the price board (خرید/فروش quotes),
@@ -76,6 +77,8 @@ const routes = [
   { path: '/sources', name: 'sources', component: SourcesView, meta: { title: 'منابع قیمت', requiresAuth: true, roles: [ROLES.SUPER_ADMIN] } },
   // Super-admin cross-platform trade explorer.
   { path: '/trades', name: 'trades', component: TradesView, meta: { title: 'معاملات سامانه', requiresAuth: true, roles: [ROLES.SUPER_ADMIN] } },
+  // Super-admin tick history explorer.
+  { path: '/tick-history', name: 'tick-history', component: TickHistoryView, meta: { title: 'تاریخچه تیک‌ها', requiresAuth: true, roles: [ROLES.SUPER_ADMIN] } },
   // Shown when an authenticated user lacks the role for a route.
   { path: '/forbidden', name: 'forbidden', component: ForbiddenView, meta: { title: 'دسترسی ندارید', requiresAuth: true } },
   // Customer store view — no auth required.

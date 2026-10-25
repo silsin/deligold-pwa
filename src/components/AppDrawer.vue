@@ -116,6 +116,9 @@
             <button v-if="auth.isSuperAdmin" type="button" class="drawer__item" @click="go('/trades')">
               <i class="material-icons">receipt_long</i> معاملات سامانه
             </button>
+            <button v-if="auth.isSuperAdmin" type="button" class="drawer__item" @click="go('/tick-history')">
+              <i class="material-icons">history_toggle_off</i> تاریخچه تیک‌ها
+            </button>
           </template>
 
           <button v-if="auth.isLoggedIn" type="button" class="drawer__item drawer__item--out" @click="logout">
