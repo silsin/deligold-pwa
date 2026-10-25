@@ -22,7 +22,10 @@ export const useTradesStore = defineStore('trades', () => {
       for (const [k, v] of Object.entries(filters)) {
         if (v !== undefined && v !== null && v !== '') params.set(k, v)
       }
-      trades.value = await api.get(`/superadmin/trades?${params.toString()}`)
+      const data = await api.get(`/superadmin/trades?${params.toString()}`)
+      // Coerce: a misconfigured proxy returning the SPA index.html would hand
+      // us a string and break the table's v-for.
+      trades.value = Array.isArray(data) ? data : []
     } catch (e) {
       error.value = e.message || 'دریافت معاملات ناموفق بود'
     } finally {
@@ -31,7 +34,8 @@ export const useTradesStore = defineStore('trades', () => {
   }
 
   async function fetchBrokers() {
-    brokers.value = await api.get('/superadmin/brokers')
+    const data = await api.get('/superadmin/brokers')
+    brokers.value = Array.isArray(data) ? data : []
   }
 
   return { trades, brokers, loading, error, fetchTrades, fetchBrokers }

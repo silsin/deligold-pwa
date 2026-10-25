@@ -57,6 +57,7 @@ export default defineConfig({
       '/uploads': { target: DG_API_TARGET, changeOrigin: true },
       '/push': { target: DG_API_TARGET, changeOrigin: true },
       '/notifications': { target: DG_API_TARGET, changeOrigin: true },
+      '/superadmin': { target: DG_API_TARGET, changeOrigin: true },
     }
   },
   build: { outDir: 'dist', sourcemap: false, chunkSizeWarningLimit: 900 }

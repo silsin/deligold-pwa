@@ -28,8 +28,10 @@ export const useSourcesStore = defineStore('sources', () => {
         api.get('/superadmin/sources'),
         api.get('/superadmin/symbols'),
       ])
-      sources.value = list || []
-      symbols.value = syms || []
+      // Coerce: a misconfigured proxy that returns the SPA index.html would
+      // otherwise hand us a string and break the v-for/.map in the views.
+      sources.value = Array.isArray(list) ? list : []
+      symbols.value = Array.isArray(syms) ? syms : []
     } catch (e) {
       error.value = e.message || 'دریافت منابع ناموفق بود'
     }
@@ -57,7 +59,8 @@ export const useSourcesStore = defineStore('sources', () => {
     if (symbol) params.set('symbol', symbol)
     if (source) params.set('source', source)
     if (range) params.set('range', range)
-    ticks.value = await api.get(`/superadmin/ticks?${params.toString()}`)
+    const data = await api.get(`/superadmin/ticks?${params.toString()}`)
+    ticks.value = Array.isArray(data) ? data : []
   }
 
   /** Start a polling loop that re-fetches ticks (and refreshes sources). */

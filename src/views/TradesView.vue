@@ -126,7 +126,10 @@ function reset() {
 }
 
 onMounted(async () => {
-  try { SYMBOLS_CONST.value = await api.get('/superadmin/symbols') } catch { /* ignore */ }
+  try {
+    const syms = await api.get('/superadmin/symbols')
+    SYMBOLS_CONST.value = Array.isArray(syms) ? syms : []
+  } catch { /* ignore */ }
   await trades.fetchBrokers()
   await apply()
 })
