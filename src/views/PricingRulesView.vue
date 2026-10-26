@@ -8,6 +8,18 @@
       <button type="button" class="icon-btn material-icons" :class="{ 'is-busy': loadingRules }" :disabled="loadingRules" title="بازآوری" @click="reload">refresh</button>
     </header>
 
+    <div class="tiers">
+      <button type="button" class="tier" :class="{ 'is-active': selectedTier === 'CUSTOMER' }" @click="setTier('CUSTOMER')">
+        <i class="material-icons">person</i> قیمت مشتری
+      </button>
+      <button type="button" class="tier" :class="{ 'is-active': selectedTier === 'BROKER_MANAGER', 'is-locked': !canManageManagerTier }"
+        :disabled="!canManageManagerTier" :title="canManageManagerTier ? 'قیمت مدیر کارگزاری' : 'مخصوص مدیر ارشد کارگزاری'"
+        @click="setTier('BROKER_MANAGER')">
+        <i class="material-icons">support_agent</i> قیمت مدیر کارگزاری
+      </button>
+      <small class="tier__hint">{{ selectedTier === 'CUSTOMER' ? 'حاشیه‌ای که مشتری‌ها با آن معامله می‌کنند' : 'حاشیه‌ای که مدیران کارگزاری با آن معامله می‌کنند' }}</small>
+    </div>
+
     <p v-if="error" class="msg msg--err">{{ error }}</p>
     <p v-if="okMsg" class="msg msg--ok">{{ okMsg }}</p>
 
@@ -117,17 +129,29 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useMarketStore } from '../stores/market'
+import { useAuthStore } from '../stores/auth'
 import { api } from '../utils/api.js'
 import { faMoney, faNumber } from '../utils/format.js'
 
 const market = useMarketStore()
+const auth = useAuthStore()
 
 const loadingRules = ref(false)
 const error = ref('')
 const okMsg = ref('')
 const saving = ref('')
+
+/** Price tier being edited: CUSTOMER (manager→customer) or BROKER_MANAGER (admin→manager). */
+const selectedTier = ref('CUSTOMER')
+/** Only a broker admin / super admin may edit the manager-tier prices. */
+const canManageManagerTier = computed(() => auth.isBrokerAdmin || auth.isSuperAdmin)
+
+function setTier(tier) {
+  if (tier === 'BROKER_MANAGER' && !canManageManagerTier.value) return
+  selectedTier.value = tier
+}
 
 /** Form state keyed by symbol — one entry per tradeable symbol. */
 const rules = reactive({})
@@ -138,6 +162,7 @@ const rows = ref([])
 function defaultRule(symbol) {
   return {
     symbol,
+    targetRole: selectedTier.value,
     enabled: true,
     allowBuy: true,
     allowSell: true,
@@ -182,7 +207,7 @@ async function loadRules() {
   error.value = ''
   okMsg.value = ''
   try {
-    const fetched = await api.get('/broker-pricing')
+    const fetched = await api.get(`/broker-pricing?targetRole=${selectedTier.value}`)
     const bySymbol = {}
     for (const r of Array.isArray(fetched) ? fetched : []) bySymbol[r.symbol] = r
 
@@ -194,6 +219,7 @@ async function loadRules() {
       rules[s.symbol] = r
         ? {
             symbol: s.symbol,
+            targetRole: r.targetRole || selectedTier.value,
             enabled: r.enabled ?? true,
             allowBuy: r.allowBuy ?? true,
             allowSell: r.allowSell ?? true,
@@ -226,6 +252,7 @@ async function saveRule(symbol) {
       sellMarginToman: Number(r.sellMarginToman) || 0,
       buyMarginPercent: Number(r.buyMarginPercent) || 0,
       sellMarginPercent: Number(r.sellMarginPercent) || 0,
+      targetRole: selectedTier.value,
     }
     const saved = await api.put(`/broker-pricing/${symbol}`, payload)
     if (saved?.symbol) {
@@ -237,6 +264,7 @@ async function saveRule(symbol) {
         sellMarginToman: Number(saved.sellMarginToman) ?? 0,
         buyMarginPercent: Number(saved.buyMarginPercent) ?? 0,
         sellMarginPercent: Number(saved.sellMarginPercent) ?? 0,
+        targetRole: saved.targetRole ?? selectedTier.value,
       })
     }
     okMsg.value = 'قانون ذخیره شد.'
@@ -253,7 +281,7 @@ async function clearRule(symbol) {
   error.value = ''
   okMsg.value = ''
   try {
-    await api.delete(`/broker-pricing/${symbol}`)
+    await api.delete(`/broker-pricing/${symbol}?targetRole=${selectedTier.value}`)
     Object.assign(rules[symbol], defaultRule(symbol))
     okMsg.value = 'قانون حذف شد؛ نماد به قیمت زنده بازگشت.'
   } catch (e) {
@@ -277,6 +305,8 @@ async function reload() {
   await loadRules()
 }
 
+watch(selectedTier, () => { loadRules() })
+
 onMounted(async () => {
   // Ensure the symbol catalogue + live prices are present for the preview.
   if (!market.symbols.length) await market.fetchMarket({ withChart: false })
@@ -291,6 +321,17 @@ onMounted(async () => {
 .sub { margin: 2px 0 0; font-size: 11.5px; color: var(--text-muted); }
 .icon-btn { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: var(--card); border: 1px solid var(--border); color: var(--text-muted); font-size: 19px; }
 .icon-btn.is-busy { opacity: 0.6; }
+
+.tiers { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tier {
+  display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 11px;
+  border: 1px solid var(--border); background: var(--card); color: var(--text-muted);
+  font-size: 13px; font-weight: 800; cursor: pointer;
+}
+.tier i { font-size: 18px; }
+.tier.is-active { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.tier.is-locked { opacity: 0.45; cursor: not-allowed; }
+.tier__hint { font-size: 11px; color: var(--text-muted); margin-right: auto; }
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 

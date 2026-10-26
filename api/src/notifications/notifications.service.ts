@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthUser } from '../auth/current-user.decorator';
 
@@ -57,15 +58,39 @@ export class NotificationsService {
     return this.prisma.notification.count({ where: { userId, read: false } });
   }
 
+  /**
+   * Send an in-app announcement to users in the actor's scope, capped by the
+   * role hierarchy:
+   *   - BROKER_MANAGER → only CUSTOMER (their own broker).
+   *   - BROKER_ADMIN   → CUSTOMER and BROKER_MANAGER (their own broker); an
+   *     empty `targetRole` means "customers + managers", never admins/super.
+   *   - SUPER_ADMIN     → any role, any broker.
+   * The actor themselves is always excluded.
+   */
   async broadcast(
     actor: AuthUser,
     dto: { title: string; body: string; url?: string; targetRole?: string },
   ): Promise<{ count: number }> {
-    const where: Record<string, unknown> = {};
-    if (actor.role !== 'SUPER_ADMIN' && actor.brokerId) {
-      where.brokerId = actor.brokerId;
+    const where: Prisma.UserWhereInput = { id: { not: actor.userId } };
+
+    if (actor.role !== 'SUPER_ADMIN') {
+      where.brokerId = actor.brokerId ?? '__no_broker__';
     }
-    if (dto.targetRole) where.role = dto.targetRole;
+
+    if (actor.role === 'BROKER_MANAGER') {
+      // A manager can only ever address customers, whatever they request.
+      where.role = 'CUSTOMER';
+    } else if (actor.role === 'BROKER_ADMIN') {
+      if (dto.targetRole === 'CUSTOMER' || dto.targetRole === 'BROKER_MANAGER') {
+        where.role = dto.targetRole;
+      } else {
+        // "Everyone" for an admin = customers + managers, never other admins.
+        where.role = { in: ['CUSTOMER', 'BROKER_MANAGER'] };
+      }
+    } else if (dto.targetRole) {
+      where.role = dto.targetRole as Prisma.UserWhereInput['role'];
+    }
+
     const users = await this.prisma.user.findMany({ where, select: { id: true } });
     if (!users.length) return { count: 0 };
     await this.prisma.notification.createMany({

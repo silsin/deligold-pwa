@@ -127,10 +127,9 @@ export const useMarketStore = defineStore('market', () => {
       // pulls the auth store at module load — keeps the dependency one-way.
       const { useAuthStore } = await import('../stores/auth.js');
       const auth = useAuthStore();
-      const brokerId = auth.user?.brokerId;
-      const boardUrl = brokerId
-        ? `/market/board?brokerId=${encodeURIComponent(brokerId)}`
-        : '/market/board';
+      // Signed-in users get the board priced at THEIR tier (role read from the
+      // JWT server-side via /market/board/me). Guests get the raw public board.
+      const boardUrl = auth.isLoggedIn ? '/market/board/me' : '/market/board';
       const data = await api.get(boardUrl);
       
       // Only update symbols if they actually changed

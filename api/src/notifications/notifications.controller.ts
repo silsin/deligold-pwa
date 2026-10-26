@@ -1,13 +1,25 @@
 import { Body, Controller, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
 import { Role } from '@prisma/client';
+import { IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { CurrentUser, type AuthUser } from '../auth/current-user.decorator';
 import { Roles } from '../auth/roles.decorator';
 import { NotificationsService } from './notifications.service';
 
 class BroadcastDto {
+  @IsString()
+  @IsNotEmpty()
   title!: string;
+
+  @IsString()
+  @IsNotEmpty()
   body!: string;
+
+  @IsOptional()
+  @IsString()
   url?: string;
+
+  @IsOptional()
+  @IsIn(['CUSTOMER', 'BROKER_MANAGER', 'BROKER_ADMIN', 'SUPER_ADMIN'])
   targetRole?: string;
 }
 

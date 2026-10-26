@@ -11,6 +11,8 @@ import { isTradeSymbol } from '../market/symbols';
  */
 export interface PriceRuleView {
   symbol: string;
+  /** Which role tier this rule prices: "CUSTOMER" | "BROKER_MANAGER". */
+  targetRole: string;
   enabled: boolean;
   allowBuy: boolean;
   allowSell: boolean;
@@ -24,6 +26,23 @@ export interface PriceRuleView {
 /** The staff roles allowed to manage a broker's pricing rules. */
 const STAFF_ROLES = new Set<Role>([Role.BROKER_MANAGER, Role.BROKER_ADMIN, Role.SUPER_ADMIN]);
 
+/** Price tiers. CUSTOMER is the manager→customer layer (the original one);
+ *  BROKER_MANAGER is the broker-admin→manager layer (one rung up the hierarchy). */
+export type PriceTier = 'CUSTOMER' | 'BROKER_MANAGER';
+const VALID_TIERS = new Set<PriceTier>(['CUSTOMER', 'BROKER_MANAGER']);
+
+/** The tier a user of `role` trades at — their own price. A broker manager
+ *  gets their own tier; everyone else (customer, broker admin, super admin)
+ *  trades at the CUSTOMER tier. */
+export function tierForRole(role: Role | string): PriceTier {
+  return role === Role.BROKER_MANAGER || role === 'BROKER_MANAGER' ? 'BROKER_MANAGER' : 'CUSTOMER';
+}
+
+/** Normalize and validate a requested tier, defaulting to CUSTOMER. */
+function normalizeTier(t: string | undefined | null): PriceTier {
+  return t && VALID_TIERS.has(t as PriceTier) ? (t as PriceTier) : 'CUSTOMER';
+}
+
 /** Shape of the write payload accepted by `setRule`. */
 export interface SetRuleInput {
   enabled?: boolean;
@@ -36,14 +55,17 @@ export interface SetRuleInput {
 }
 
 /**
- * Per-broker pricing rules.
+ * Per-broker pricing rules, tiered by role.
  *
- * A broker manager layers a margin (fixed Toman and/or a percent) on top of
- * the live raw price for each symbol, so the buy/sell their customers trade at
- * is derived from one shared market reading rather than typed in by hand.
- * `MarketService.boardForBroker` reads these rows directly to adjust the
- * board — this service never touches the board itself, it just invalidates
- * the feed cache after a write so the next read reflects the change at once.
+ * A broker manager layers a margin on top of the live raw price for their
+ * *customers* (the CUSTOMER tier). A broker admin can do that too, and can also
+ * set a separate margin for their *broker managers* (the BROKER_MANAGER tier) —
+ * the same mechanism one rung up the hierarchy, so an admin controls the price
+ * both their managers and their customers trade at.
+ *
+ * `MarketService.boardForBroker` reads these rows directly to adjust the board
+ * for the requesting user's tier — this service never touches the board itself,
+ * it just invalidates the feed cache after a write so the next read reflects it.
  */
 @Injectable()
 export class BrokerPricingService {
@@ -53,33 +75,51 @@ export class BrokerPricingService {
   ) {}
 
   /**
-   * Every rule for the actor's broker, newest-first. A SUPER_ADMIN (no broker
-   * of their own) sees every rule across the platform for oversight.
+   * Every rule for the actor's broker (all tiers for an admin / super admin).
+   * A broker manager only ever sees the CUSTOMER tier — they cannot read or
+   * edit the margin their admin set for them.
    */
-  async listRules(actor: { role: Role; brokerId: string | null }): Promise<PriceRuleView[]> {
-    const where = actor.role === Role.SUPER_ADMIN || !actor.brokerId ? {} : { brokerId: actor.brokerId };
+  async listRules(
+    actor: { role: Role; brokerId: string | null },
+    targetRole?: string,
+  ): Promise<PriceRuleView[]> {
+    const where: Prisma.BrokerPriceRuleWhereInput =
+      actor.role === Role.SUPER_ADMIN || !actor.brokerId ? {} : { brokerId: actor.brokerId };
+
+    // A manager is confined to the customer tier, regardless of what they ask for.
+    if (actor.role === Role.BROKER_MANAGER) {
+      where.targetRole = 'CUSTOMER';
+    } else if (targetRole) {
+      where.targetRole = normalizeTier(targetRole);
+    }
+
     const rows = await this.prisma.brokerPriceRule.findMany({
       where,
-      orderBy: { updatedAt: 'desc' },
+      orderBy: [{ targetRole: 'asc' }, { updatedAt: 'desc' }],
     });
     return rows.map(r => this.view(r));
   }
 
   /**
-   * Create or replace a symbol's margin rule for the actor's broker.
+   * Create or replace a symbol's margin rule for a tier.
    *
-   * Broker-manager/admin only in practice: a SUPER_ADMIN has no broker of their
-   * own, so they cannot set a rule through this endpoint (they oversee instead).
-   * Enforced by `@Roles(STAFF)` on the controller and by the broker requirement
-   * here — a rule must belong to a real broker.
+   * CUSTOMER tier: any staff (manager / admin / super) may set it.
+   * BROKER_MANAGER tier: only a broker admin or super admin may set it — a
+   * broker manager cannot price themselves.
    */
   async setRule(
     actor: { userId: string; role: Role; brokerId: string | null },
     symbol: string,
     input: SetRuleInput,
+    targetRole?: string,
   ): Promise<PriceRuleView> {
     if (!isTradeSymbol(symbol)) throw new TradeError('نماد معاملاتی نامعتبر است');
     if (!actor.brokerId) throw new TradeError('سازمان شما مشخص نیست', 400);
+
+    const tier = normalizeTier(targetRole);
+    if (tier === 'BROKER_MANAGER' && actor.role !== Role.BROKER_ADMIN && actor.role !== Role.SUPER_ADMIN) {
+      throw new TradeError('تنها مدیر ارشد کارگزاری می‌تواند قیمت مدیران را تنظیم کند', 403);
+    }
 
     const toDec = (v: number | null | undefined) =>
       v == null ? new Prisma.Decimal(0) : new Prisma.Decimal(Math.max(0, Number(v) || 0));
@@ -96,8 +136,8 @@ export class BrokerPricingService {
     };
 
     const row = await this.prisma.brokerPriceRule.upsert({
-      where: { brokerId_symbol: { brokerId: actor.brokerId, symbol } },
-      create: { brokerId: actor.brokerId, symbol, ...data },
+      where: { brokerId_symbol_targetRole: { brokerId: actor.brokerId, symbol, targetRole: tier } },
+      create: { brokerId: actor.brokerId, symbol, targetRole: tier, ...data },
       update: data,
     });
 
@@ -106,26 +146,35 @@ export class BrokerPricingService {
     return this.view(row);
   }
 
-  /** Remove a symbol's rule so it falls back to the live feed. */
-  async clearRule(actor: { role: Role; brokerId: string | null }, symbol: string): Promise<void> {
+  /** Remove a symbol's rule for a tier so it follows the live feed again. */
+  async clearRule(
+    actor: { role: Role; brokerId: string | null },
+    symbol: string,
+    targetRole?: string,
+  ): Promise<void> {
     if (!isTradeSymbol(symbol)) throw new TradeError('نماد معاملاتی نامعتبر است');
     if (!actor.brokerId) throw new TradeError('سازمان شما مشخص نیست', 400);
 
+    const tier = normalizeTier(targetRole);
+    if (tier === 'BROKER_MANAGER' && actor.role !== Role.BROKER_ADMIN && actor.role !== Role.SUPER_ADMIN) {
+      throw new TradeError('تنها مدیر ارشد کارگزاری می‌تواند قیمت مدیران را تغییر دهد', 403);
+    }
+
     await this.prisma.brokerPriceRule.deleteMany({
-      where: { brokerId: actor.brokerId, symbol },
+      where: { brokerId: actor.brokerId, symbol, targetRole: tier },
     });
     this.market.invalidate();
   }
 
   /**
-   * Every enabled rule for a broker, as a map keyed by symbol. Read by
-   * `MarketService.boardForBroker` to adjust the board — queried through
-   * Prisma directly to avoid a MarketService → BrokerPricingService cycle.
+   * Every enabled rule for a broker at a given user's tier, as a map keyed by
+   * symbol. Read by `MarketService.boardForBroker` to adjust the board for that
+   * user's tier — queried through Prisma directly to avoid a MarketService cycle.
    */
-  async getRulesForBroker(brokerId: string): Promise<Map<string, PriceRuleView>> {
-    const rows = await this.prisma.brokerPriceRule.findMany({
-      where: { brokerId, enabled: true },
-    });
+  async getRulesForBroker(brokerId: string, role?: Role): Promise<Map<string, PriceRuleView>> {
+    const where: Prisma.BrokerPriceRuleWhereInput = { brokerId, enabled: true };
+    if (role) where.targetRole = tierForRole(role);
+    const rows = await this.prisma.brokerPriceRule.findMany({ where });
     return new Map(rows.map(r => [r.symbol, this.view(r)]));
   }
 
@@ -134,6 +183,7 @@ export class BrokerPricingService {
     const num = (v: Prisma.Decimal) => (v == null ? 0 : Number(v));
     return {
       symbol: r.symbol,
+      targetRole: r.targetRole,
       enabled: r.enabled,
       allowBuy: r.allowBuy,
       allowSell: r.allowSell,

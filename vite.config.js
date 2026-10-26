@@ -58,6 +58,7 @@ export default defineConfig({
       '/push': { target: DG_API_TARGET, changeOrigin: true },
       '/notifications': { target: DG_API_TARGET, changeOrigin: true },
       '/superadmin': { target: DG_API_TARGET, changeOrigin: true },
+      '/broker-pricing': { target: DG_API_TARGET, changeOrigin: true },
     }
   },
   build: { outDir: 'dist', sourcemap: false, chunkSizeWarningLimit: 900 }

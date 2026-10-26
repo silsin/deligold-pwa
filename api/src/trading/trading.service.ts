@@ -302,10 +302,10 @@ export class TradingService {
           'برای فروش باید هویت شما تأیید شده باشد. از بخش پروفایل مدارک خود را ارسال کنید',
         );
       }
-      return this.createManualOrder(userId, symbol, weight, input.fulfillment, input.deliveryAddress, user.brokerId);
+      return this.createManualOrder(userId, symbol, weight, input.fulfillment, input.deliveryAddress, user.brokerId, user.role);
     }
 
-    const price = await this.market.fillPrice(symbol, side, user.brokerId);
+    const price = await this.market.fillPrice(symbol, side, user.brokerId, user.role);
     if (!price) throw new TradeError('قیمت این نماد در دسترس نیست', 503);
 
     return side === 'BUY'
@@ -441,8 +441,9 @@ export class TradingService {
     fulfillment?: FulfillmentMethod,
     deliveryAddress?: string,
     brokerId?: string | null,
+    role?: import('@prisma/client').Role,
   ): Promise<OrderView> {
-    const price = await this.market.fillPrice(symbol, 'BUY', brokerId);
+    const price = await this.market.fillPrice(symbol, 'BUY', brokerId, role);
     if (!price) throw new TradeError('قیمت این نماد در دسترس نیست', 503);
 
     if (fulfillment === 'DELIVERY' && !deliveryAddress?.trim()) {

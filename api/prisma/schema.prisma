@@ -637,6 +637,11 @@ model BrokerPriceRule {
   brokerId         String
   broker           Broker   @relation(fields: [brokerId], references: [id], onDelete: Cascade)
   symbol           String
+  /// Which role tier this margin applies to: "CUSTOMER" (manager→customer,
+  /// the original layer) or "BROKER_MANAGER" (broker-admin→manager, the tier
+  /// above). A broker admin can set both; a broker manager can only set the
+  /// CUSTOMER tier. The board a user sees is filtered to their own tier.
+  targetRole       String   @default("CUSTOMER")
   /// When false the symbol falls back to the live feed entirely.
   enabled          Boolean  @default(true)
   /// Close only the buy side (customer cannot buy).
@@ -655,8 +660,8 @@ model BrokerPriceRule {
   updatedById      String?
   updatedAt        DateTime @updatedAt
 
-  /// One rule per broker per symbol.
-  @@unique([brokerId, symbol])
+  /// One rule per broker per symbol per tier.
+  @@unique([brokerId, symbol, targetRole])
   @@index([brokerId])
 }
 

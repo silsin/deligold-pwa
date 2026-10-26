@@ -89,6 +89,28 @@ export class MarketController {
     };
   }
 
+  /**
+   * The board for the signed-in user, priced at *their* tier (trusted — read
+   * from the JWT, never the client). A broker manager sees the BROKER_MANAGER
+   * margin their admin set; a customer (and a broker admin) sees the CUSTOMER
+   * tier; a super admin with no broker sees the raw feed.
+   */
+  @Get('board/me')
+  async boardForMe(@CurrentUser() user: AuthUser) {
+    const b = user?.brokerId
+      ? await this.market.boardForBroker(user.brokerId, user.role)
+      : await this.market.board();
+    return {
+      symbols: TRADE_SYMBOLS,
+      quotes: b.quotes,
+      source: b.source,
+      updatedAt: b.updatedAt,
+      stale: b.stale,
+      note: b.note,
+      staleRates: b.staleRates,
+    };
+  }
+
   /** Every manual override, for the manager's setup screen. Staff only. */
   @Roles(...STAFF)
   @Get('prices')

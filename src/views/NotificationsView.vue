@@ -62,9 +62,20 @@
             placeholder="لینک (اختیاری)"
           />
           <select v-model="bForm.targetRole" class="field__select">
-            <option value="">همه کاربران</option>
-            <option value="CUSTOMER">مشتریان</option>
-            <option value="BROKER_MANAGER">مدیران</option>
+            <template v-if="auth.isSuperAdmin">
+              <option value="">همه کاربران</option>
+              <option value="CUSTOMER">مشتریان</option>
+              <option value="BROKER_MANAGER">مدیران کارگزاری</option>
+              <option value="BROKER_ADMIN">مدیران ارشد</option>
+            </template>
+            <template v-else-if="auth.isBrokerAdmin">
+              <option value="">مشتریان و مدیران</option>
+              <option value="CUSTOMER">فقط مشتریان</option>
+              <option value="BROKER_MANAGER">فقط مدیران کارگزاری</option>
+            </template>
+            <template v-else>
+              <option value="CUSTOMER">مشتریان</option>
+            </template>
           </select>
           <div class="broadcast-form__footer">
             <p v-if="bResult" class="bresult" :class="bResult.ok ? 'bresult--ok' : 'bresult--err'">
@@ -134,7 +145,14 @@ const router = useRouter()
 
 const broadcastOpen = ref(false)
 const bResult = ref(null)
-const bForm = reactive({ title: '', body: '', url: '', targetRole: '' })
+// A broker manager can only ever message customers — default to that tier so
+// the form starts in a valid state even before the user touches the dropdown.
+const bForm = reactive({
+  title: '',
+  body: '',
+  url: '',
+  targetRole: auth.isBrokerManager ? 'CUSTOMER' : '',
+})
 
 async function onItemClick(n) {
   if (!n.read) await notifications.markRead(n.id)

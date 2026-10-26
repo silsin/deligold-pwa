@@ -257,8 +257,14 @@ export class MarketService implements OnModuleInit, OnModuleDestroy {
    * The rules are read straight from Prisma (not via BrokerPricingService) so
    * MarketService never depends on the pricing module — keeps the dependency
    * one-way and avoids a constructor cycle.
+   *
+   * When `role` is given, only the rule matching that user's price tier is
+   * applied — a broker manager sees the BROKER_MANAGER tier their admin set,
+   * a customer (and a broker admin) sees the CUSTOMER tier. Without a role
+   * (the public board) every enabled rule is applied, preserving the old
+   * behaviour.
    */
-  async boardForBroker(brokerId: string): Promise<Board> {
+  async boardForBroker(brokerId: string, role?: import('@prisma/client').Role): Promise<Board> {
     // Serve the cached board rather than wait on a slow upstream (8+ s), but
     // kick a refresh when it has gone stale: every signed-in customer reads
     // this route, so without the kick nothing but the 5-minute poll would
@@ -270,7 +276,9 @@ export class MarketService implements OnModuleInit, OnModuleDestroy {
 
     let rules: BrokerPriceRule[];
     try {
-      rules = await this.prisma.brokerPriceRule.findMany({ where: { brokerId, enabled: true } });
+      const where: Prisma.BrokerPriceRuleWhereInput = { brokerId, enabled: true };
+      if (role) where.targetRole = role === 'BROKER_MANAGER' ? 'BROKER_MANAGER' : 'CUSTOMER';
+      rules = await this.prisma.brokerPriceRule.findMany({ where });
     } catch (err) {
       this.logger.warn(`could not read broker pricing rules, serving raw board: ${String(err)}`);
       return board;
@@ -324,12 +332,13 @@ export class MarketService implements OnModuleInit, OnModuleDestroy {
    * shops use. When a source carries no spread we synthesise one from the mid,
    * so the platform never fills both sides at the same number.
    */
-  async fillPrice(symbol: string, side: 'BUY' | 'SELL', brokerId?: string | null): Promise<number | null> {
+  async fillPrice(symbol: string, side: 'BUY' | 'SELL', brokerId?: string | null, role?: import('@prisma/client').Role): Promise<number | null> {
     if (!isTradeSymbol(symbol)) return null;
     // A broker's customer trades at that broker's numbers — the same board
-    // their app displays — never the raw feed.
+    // their app displays — never the raw feed. `role` selects the right price
+    // tier (a manager fills at the manager tier, a customer at the customer tier).
     if (brokerId) await this.board(); // fresh reading first; boardForBroker serves the cache
-    const board = brokerId ? await this.boardForBroker(brokerId) : await this.board();
+    const board = brokerId ? await this.boardForBroker(brokerId, role) : await this.board();
     const quote = board.quotes[symbol];
     if (!quote) return null;
 
