@@ -68,8 +68,8 @@ const routes = [
   { path: '/customers', name: 'customers', component: CustomersView, meta: { title: 'مشتریان', requiresAuth: true, roles: STAFF_ROLES } },
   // Wholesale stores + their movements — every staff role.
   { path: '/stores', name: 'stores', component: CatalogView, meta: { title: 'فروشگاه‌ها', requiresAuth: true, roles: STAFF_ROLES } },
-  // Financial reports (trial balance, trades) — admins and above.
-  { path: '/reports', name: 'reports', component: ReportsView, meta: { title: 'گزارش‌ها', requiresAuth: true, roles: ADMIN_ROLES } },
+  // Financial reports — all staff roles (broker manager, broker admin, super admin).
+  { path: '/reports', name: 'reports', component: ReportsView, meta: { title: 'گزارش‌ها', requiresAuth: true, roles: STAFF_ROLES } },
   // User directory + role grants — super-admin only (managers/admins can't
   // mint roles at or above their own, so they get no UI for it).
   { path: '/users', name: 'users', component: UsersView, meta: { title: 'کاربران', requiresAuth: true, roles: [ROLES.SUPER_ADMIN] } },
