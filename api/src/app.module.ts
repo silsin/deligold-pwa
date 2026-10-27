@@ -16,6 +16,7 @@ import { BrokerPricingModule } from './broker-pricing/broker-pricing.module';
 import { PushModule } from './push/push.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SuperadminModule } from './superadmin/superadmin.module';
+import { UploadsModule } from './uploads/uploads.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 
@@ -37,6 +38,7 @@ import { RolesGuard } from './auth/guards/roles.guard';
     PushModule,
     NotificationsModule,
     SuperadminModule,
+    UploadsModule,
   ],
   providers: [
     // Order matters: JwtAuthGuard attaches the user, then RolesGuard reads it.

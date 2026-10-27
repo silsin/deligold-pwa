@@ -46,7 +46,7 @@
           :disabled="busy"
           @input="onInput"
         />
-        <small v-if="amount > 0" class="field__echo">{{ faMoney(amount) }}</small>
+        <small v-if="amount > 0" class="field__echo">{{ amountWords }}</small>
       </label>
 
       <div class="chips">
@@ -132,13 +132,6 @@ const emit = defineEmits(['close', 'submit'])
 const PRESETS = [500_000_000, 200_000_000, 100_000_000, 50_000_000, 10_000_000]
 const CEILING = 500_000_000
 
-/**
- * Supported charge methods. `manual` ones require a tracking code and offer a
- * receipt upload; the gateway one is handled by the backend redirect.
- * NOTE: these values are sent verbatim to POST /wallet/deposits — keep them in
- * sync with the backend's accepted `method` enum (only BANK_TRANSFER is
- * confirmed to work today).
- */
 const METHODS = [
   { value: 'BANK_TRANSFER', label: 'کارت به کارت', icon: 'credit_card', manual: true },
   { value: 'CARD', label: 'درگاه بانکی', icon: 'account_balance', manual: false },
@@ -148,8 +141,8 @@ const METHODS = [
 const method = ref('BANK_TRANSFER')
 const isManual = computed(() => METHODS.find(m => m.value === method.value)?.manual === true)
 
-const raw = ref('')
-const amount = ref(0)
+const raw = ref('')        // what the user sees in the input (formatted with commas)
+const amount = ref(0)      // internal numeric value
 const reference = ref('')
 const note = ref('')
 const receiptPath = ref('')
@@ -163,36 +156,107 @@ const valid = computed(() => {
   return true
 })
 
-/** Pre-fill amount field when initialAmount prop is set. */
-watch(
-  () => props.initialAmount,
-  (newVal) => {
-    if (newVal > 0) {
-      amount.value = newVal
-      raw.value = toFa(newVal)
-      error.value = ''
-    }
-  },
-  { immediate: true }
-)
+// ── Number → Persian word converter ────────────────────────────────────────
 
-/** Persian numerals are accepted: ۱۲۳ parses the same as 123. */
+const ONES = ['', 'یک', 'دو', 'سه', 'چهار', 'پنج', 'شش', 'هفت', 'هشت', 'نه',
+              'ده', 'یازده', 'دوازده', 'سیزده', 'چهارده', 'پانزده', 'شانزده',
+              'هفده', 'هجده', 'نوزده']
+const TENS  = ['', '', 'بیست', 'سی', 'چهل', 'پنجاه', 'شصت', 'هفتاد', 'هشتاد', 'نود']
+const HUNDREDS = ['', 'صد', 'دویست', 'سیصد', 'چهارصد', 'پانصد', 'ششصد',
+                  'هفتصد', 'هشتصد', 'نهصد']
+
+function threeDigits(n) {
+  // n is 0..999
+  const h = Math.floor(n / 100)
+  const rest = n % 100
+  const parts = []
+  if (h) parts.push(HUNDREDS[h])
+  if (rest < 20) {
+    if (rest) parts.push(ONES[rest])
+  } else {
+    const t = Math.floor(rest / 10)
+    const o = rest % 10
+    parts.push(TENS[t])
+    if (o) parts.push(ONES[o])
+  }
+  return parts.join(' و ')
+}
+
+function toWords(n) {
+  if (!n || n === 0) return 'صفر'
+  const SCALES = [
+    [1_000_000_000_000, 'تریلیون'],
+    [1_000_000_000, 'میلیارد'],
+    [1_000_000, 'میلیون'],
+    [1_000, 'هزار'],
+    [1, ''],
+  ]
+  const parts = []
+  let rem = n
+  for (const [scale, label] of SCALES) {
+    if (rem >= scale) {
+      const chunk = Math.floor(rem / scale)
+      rem -= chunk * scale
+      const words = threeDigits(chunk)
+      parts.push(label ? `${words} ${label}` : words)
+    }
+  }
+  return parts.join(' و ')
+}
+
+/**
+ * The amount in Persian words + تومان, shown under the input.
+ * e.g. 100_000_000 → "صد میلیون تومان"
+ */
+const amountWords = computed(() => {
+  if (!amount.value || amount.value <= 0) return ''
+  return `${toWords(amount.value)} تومان`
+})
+
+// ── Input formatting (thousands separators while typing) ────────────────────
+
+/** Format a plain integer as a comma-separated string in Persian digits. */
+function formatWithCommas(n) {
+  if (!n) return ''
+  return toFa(n.toLocaleString('en-US'))   // en-US gives 1,234,567 — then convert digits
+}
+
+/** Persian numerals → ASCII so Number() can parse them. */
 function parseDigits(value) {
   const kept = value.replace(/[^\d۰-۹]/g, '')
   return Number(kept.replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))) || 0
 }
 
-function onInput() {
-  amount.value = parseDigits(raw.value)
+function onInput(e) {
+  // Strip everything except digits (ASCII + Persian), parse to number, reformat.
+  const numeric = parseDigits(e.target.value)
+  amount.value = numeric
+  raw.value = formatWithCommas(numeric)
+  // Move cursor to end (reformat shifts it).
+  // Vue updates the DOM on next tick but the native input needs the value now.
+  e.target.value = raw.value
   if (amount.value > CEILING) error.value = 'حداکثر مبلغ هر واریز ۵۰۰ میلیون تومان است'
   else error.value = ''
 }
 
 function pick(value) {
   amount.value = value
-  raw.value = toFa(value)
+  raw.value = formatWithCommas(value)
   error.value = ''
 }
+
+/** Pre-fill amount field when initialAmount prop is set. */
+watch(
+  () => props.initialAmount,
+  (newVal) => {
+    if (newVal > 0) {
+      amount.value = newVal
+      raw.value = formatWithCommas(newVal)
+      error.value = ''
+    }
+  },
+  { immediate: true }
+)
 
 /** Upload the chosen receipt to /uploads, mirroring the order-receipt flow. */
 async function onReceipt(e) {
@@ -216,8 +280,6 @@ async function onReceipt(e) {
 
 function submit() {
   if (!valid.value || props.busy) return
-  // Fold the uploaded receipt path into `note` — the deposit body stays within
-  // the confirmed {amount, method, reference, note} contract, no invented fields.
   const noteParts = []
   if (note.value.trim()) noteParts.push(note.value.trim())
   if (receiptPath.value) noteParts.push(`رسید: ${receiptPath.value}`)
@@ -324,9 +386,9 @@ function submit() {
 .field__echo {
   display: block;
   margin-top: 8px;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 800;
-  color: var(--accent);
+  color: var(--up);
   font-variant-numeric: tabular-nums;
 }
 
