@@ -272,8 +272,25 @@ function reset() {
 }
 
 function readQueryCode() {
-  const code = route.query.code ? String(route.query.code) : ''
-  if (code && code.toUpperCase() !== invite.value?.code) checkCode(code)
+  // 1. Check the route query (set when App.vue navigates a logged-in user to /join?code=)
+  const fromQuery = route.query.code ? String(route.query.code) : ''
+  if (fromQuery && fromQuery.toUpperCase() !== invite.value?.code) {
+    checkCode(fromQuery)
+    return
+  }
+  // 2. Check authGate.pendingInvite — set when App.vue resolved the invite
+  //    for a guest but the user was actually logged in at activation time
+  //    (race condition on first load before session restored).
+  if (authGate.pendingInvite?.code && authGate.pendingInvite.code !== invite.value?.code) {
+    const pending = authGate.pendingInvite
+    if (pending.valid) {
+      // Fast-path: we already have the broker name and validity — no need to
+      // re-fetch; just show the confirm card directly.
+      invite.value = { code: pending.code, brokerName: pending.brokerName, valid: true }
+    } else {
+      checkCode(pending.code)
+    }
+  }
 }
 
 onMounted(readQueryCode)

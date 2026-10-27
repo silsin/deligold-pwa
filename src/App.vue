@@ -136,8 +136,18 @@ function tick() {
 
 async function handleInviteCode() {
   const code = readInviteCode()
-  if (!code || auth.isLoggedIn) return
+  if (!code) return
 
+  // ── Logged-in user ──────────────────────────────────────────────────────
+  // They don't need the register sheet — just send them to /join with the code
+  // so the JoinView picks it up, looks it up, and shows the confirm dialog.
+  if (auth.isLoggedIn) {
+    const router = (await import('./router/index.js')).default
+    router.push(`/join?code=${encodeURIComponent(code)}`)
+    return
+  }
+
+  // ── Guest ───────────────────────────────────────────────────────────────
   // The api interceptor already unwraps `{ success, data }`, so the lookup view
   // is the resolved value itself.
   let info = null

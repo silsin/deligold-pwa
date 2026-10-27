@@ -326,5 +326,36 @@ export class UsersService {
       throw new TradeError('این کاربر متعلق به سازمان شما نیست', 403);
     }
   }
+
+  /**
+   * Permanently deletes a user and all their owned data (wallet, orders,
+   * positions, sessions, push subscriptions, notifications, ledger entries).
+   * Cascades are handled by Prisma's `onDelete: Cascade` on the relations, so
+   * the ledger lines that reference this wallet are also cleaned up.
+   *
+   * Hard safety rules — super-admin only, enforced here (not just the controller):
+   *  • Cannot delete yourself.
+   *  • Cannot delete another SUPER_ADMIN.
+   */
+  async deleteUser(
+    actor: { userId: string; role: Role },
+    targetId: string,
+  ): Promise<{ ok: true }> {
+    if (actor.role !== Role.SUPER_ADMIN) {
+      throw new TradeError('فقط مدیر سیستم می‌تواند کاربر را حذف کند', 403);
+    }
+    if (targetId === actor.userId) {
+      throw new TradeError('نمی‌توانید حساب خودتان را حذف کنید', 403);
+    }
+
+    const target = await this.prisma.user.findUnique({ where: { id: targetId } });
+    if (!target) throw new TradeError('کاربر یافت نشد', 404);
+    if (target.role === Role.SUPER_ADMIN) {
+      throw new TradeError('حذف مدیر سیستم مجاز نیست', 403);
+    }
+
+    await this.prisma.user.delete({ where: { id: targetId } });
+    return { ok: true };
+  }
 }
 

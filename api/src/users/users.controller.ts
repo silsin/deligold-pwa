@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Put, UploadedFile, UseInterceptors, BadRequestException } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Put, UploadedFile, UseInterceptors, BadRequestException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
@@ -182,5 +182,21 @@ export class UsersController {
     @Body() body: { items: PermissionItem[] },
   ): Promise<PermissionView[]> {
     return this.permissions.setForUser(user, id, body.items);
+  }
+
+  // ── Delete (super admin only) ─────────────────────────────────────────────
+
+  /**
+   * Permanently delete a user. Super admin only. Cannot delete self or another
+   * super admin. All owned data (wallet, orders, positions, sessions) is
+   * cascade-deleted by the database.
+   */
+  @Roles(Role.SUPER_ADMIN)
+  @Delete(':id')
+  deleteUser(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+  ) {
+    return this.users.deleteUser(user, id);
   }
 }
