@@ -7,10 +7,11 @@ import { SubscribeDto, UnsubscribeDto } from './dto/push.dto';
 /**
  * Push notification endpoints.
  *
- * GET  /push/vapid-public-key  — public, returns the VAPID public key so the
- *                                PWA can call PushManager.subscribe before login.
- * POST /push/subscribe          — register/update a push subscription for this user.
- * DELETE /push/unsubscribe      — remove a push subscription for this user.
+ * GET  /push/vapid-public-key    — public, returns the VAPID public key so the
+ *                                  PWA can call PushManager.subscribe before login.
+ * GET  /push/subscription-status  — check if the user has active subscriptions.
+ * POST /push/subscribe            — register/update a push subscription for this user.
+ * DELETE /push/unsubscribe        — remove a push subscription for this user.
  */
 @Controller('push')
 export class PushController {
@@ -21,6 +22,13 @@ export class PushController {
   @Get('vapid-public-key')
   vapidPublicKey() {
     return { publicKey: this.push.getVapidPublicKey() };
+  }
+
+  /** Check if the current user has active push subscriptions. */
+  @Get('subscription-status')
+  async subscriptionStatus(@CurrentUser() user: AuthUser) {
+    const hasSubscriptions = await this.push.hasSubscriptions(user.userId);
+    return { hasSubscriptions };
   }
 
   /** Registers or updates a push subscription for the authenticated user. */

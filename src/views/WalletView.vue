@@ -237,6 +237,13 @@
       @close="closePay"
       @done="onPaid"
     />
+
+    <!-- Push notification prompt -->
+    <PushPromptModal
+      :visible="showPushPrompt"
+      @dismiss="hidePushPrompt"
+      @subscribed="onPushSubscribed"
+    />
   </div>
 </template>
 
@@ -262,6 +269,7 @@ import DepositSheet from '../components/wallet/DepositSheet.vue'
 import DepositPaySheet from '../components/wallet/DepositPaySheet.vue'
 import WithdrawSheet from '../components/wallet/WithdrawSheet.vue'
 import ConvertSheet from '../components/wallet/ConvertSheet.vue'
+import PushPromptModal from '../components/PushPromptModal.vue'
 
 const auth = useAuthStore()
 const market = useMarketStore()
@@ -270,6 +278,7 @@ const panel = ref('')
 const convertFrom = ref('')
 const refreshing = ref(false)
 const payDeposit = ref(null)
+const showPushPrompt = ref(false)
 
 /** Pending charge requests the user can resume (send receipt / connect bank). */
 const pending = computed(() => auth.pendingDeposits)
@@ -385,6 +394,17 @@ function closePay() {
 function onPaid() {
   payDeposit.value = null
   void refresh()
+  // Show push prompt after successful deposit
+  showPushPrompt.value = true
+}
+
+function hidePushPrompt() {
+  showPushPrompt.value = false
+}
+
+function onPushSubscribed() {
+  showPushPrompt.value = false
+  // Optional: show a success message or refresh
 }
 
 function dropPending(id) {

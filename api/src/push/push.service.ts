@@ -157,6 +157,11 @@ export class PushService implements OnModuleInit {
     return this.config.get<string>('VAPID_PUBLIC_KEY') ?? '';
   }
 
+  async hasSubscriptions(userId: string): Promise<boolean> {
+    const count = await this.prisma.pushSubscription.count({ where: { userId } });
+    return count > 0;
+  }
+
   async subscribe(userId: string, dto: SubscribeDto): Promise<void> {
     await this.prisma.pushSubscription.upsert({
       where: { endpoint: dto.endpoint },
@@ -178,6 +183,12 @@ export class PushService implements OnModuleInit {
 
   async sendToUser(userId: string, payload: NotifyPayload): Promise<void> {
     const subs = await this.prisma.pushSubscription.findMany({ where: { userId } });
+    
+    // Log if user has no subscriptions — this is a follow-up opportunity
+    if (!subs.length) {
+      this.logger.warn(`push subscription missing for user ${userId} — cannot deliver notification`);
+    }
+    
     await Promise.allSettled(
       subs.map(sub => this.sendOne(sub, payload)),
     );
