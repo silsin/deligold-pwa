@@ -43,12 +43,14 @@ export class ReportsController {
   }
 
   /** Deliver data as JSON, CSV attachment, or PDF attachment. */
-  private async respond<T extends Record<string, unknown>>(
+  private async respond(
     res: Response,
-    data: T | T[],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    data: any,
     opts: { format?: string; title: string; subtitle?: string; columns?: string[] },
   ) {
-    const rows: T[] = Array.isArray(data) ? data : ((data as any).rows ?? [data]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows: Record<string, unknown>[] = Array.isArray(data) ? data : ((data as any).rows ?? [data]);
     const fmt = (opts.format ?? 'json').toLowerCase();
 
     if (fmt === 'csv') {
