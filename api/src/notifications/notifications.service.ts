@@ -70,7 +70,7 @@ export class NotificationsService {
   async broadcast(
     actor: AuthUser,
     dto: { title: string; body: string; url?: string; targetRole?: string },
-  ): Promise<{ count: number }> {
+  ): Promise<{ count: number; userIds: string[] }> {
     const where: Prisma.UserWhereInput = { id: { not: actor.userId } };
 
     if (actor.role !== 'SUPER_ADMIN') {
@@ -92,7 +92,7 @@ export class NotificationsService {
     }
 
     const users = await this.prisma.user.findMany({ where, select: { id: true } });
-    if (!users.length) return { count: 0 };
+    if (!users.length) return { count: 0, userIds: [] };
     await this.prisma.notification.createMany({
       data: users.map(u => ({
         userId: u.id,
@@ -102,6 +102,6 @@ export class NotificationsService {
         url: dto.url ?? null,
       })),
     });
-    return { count: users.length };
+    return { count: users.length, userIds: users.map(u => u.id) };
   }
 }

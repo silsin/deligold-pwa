@@ -183,6 +183,12 @@ export class PushService implements OnModuleInit {
     );
   }
 
+  /** Fire-and-forget push to many users at once (e.g. a broadcast). Never throws. */
+  async sendToUsers(userIds: string[], payload: NotifyPayload): Promise<void> {
+    if (!userIds.length) return;
+    await Promise.allSettled(userIds.map(id => this.sendToUser(id, payload)));
+  }
+
   async sendToBrokerManagers(brokerId: string, payload: NotifyPayload): Promise<void> {
     if (!brokerId) return;
     const managers = await this.prisma.user.findMany({

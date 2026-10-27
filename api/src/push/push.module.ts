@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PushController } from './push.controller';
@@ -11,7 +11,7 @@ import { PushService } from './push.service';
  * UsersModule can inject it for fire-and-forget event notifications.
  */
 @Module({
-  imports: [PrismaModule, NotificationsModule],
+  imports: [PrismaModule, forwardRef(() => NotificationsModule)],
   controllers: [PushController],
   providers: [PushService],
   exports: [PushService],

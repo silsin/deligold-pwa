@@ -4,19 +4,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ACCOUNTS, AccountsService } from './accounts.service';
 import { dec, money } from '../common/money';
 
-/**
- * Reporting (گزارش‌گیری).
- *
- * Every report here is a *view over the ledger*, never a recomputation of
- * application state. That is the point of double-entry: the books are the
- * record, so a report is a SELECT, and if a report and a wallet ever disagree
- * the discrepancy is a bug in a posting — not a rounding argument.
- *
- * All report queries are broker-scoped through the accounts themselves: a
- * BROKER_ADMIN's book is a set of accounts with `brokerId` set, so restricting
- * `accountId IN (…)` restricts the whole report at once.
- */
-
 export interface DateRange {
   from?: Date;
   to?: Date;
@@ -29,25 +16,25 @@ export interface TrialBalanceRow {
   type: AccountType;
   debit: number;
   credit: number;
-  /** Debit − credit. Assets/expenses are naturally debit-positive. */
   net: number;
-  /** Closing balance, signed the way the account type is normally read. */
   balance: number;
 }
 
-/**
- * The trial balance — the report that proves the books balance at all.
- *
- * Σ(debit − credit) must be zero across every account. If it is not, a posting
- * is broken and no other report on this system can be trusted, which is why it
- * is the first thing an accountant asks for.
- */
 @Injectable()
 export class ReportsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly accounts: AccountsService,
   ) {}
+
+  // ── helpers ──────────────────────────────────────────────────────────────
+
+  private dateFilter(range: DateRange): Prisma.DateTimeFilter | undefined {
+    if (!range.from && !range.to) return undefined;
+    return { gte: range.from, lte: range.to };
+  }
+
+  // ── 1. Trial balance ──────────────────────────────────────────────────────
 
   async trialBalance(
     range: DateRange = {},
@@ -56,21 +43,14 @@ export class ReportsService {
     rows: TrialBalanceRow[];
     totalDebit: number;
     totalCredit: number;
-    /** Σ(debit − credit). Must be 0. */
     difference: number;
     balanced: boolean;
   }> {
     const accounts = await this.prisma.account.findMany({
-      where: {
-        active: true,
-        // A broker's ledger is their own accounts; the platform's are brokerId null.
-        brokerId: brokerId ?? null,
-      },
+      where: { active: true, brokerId: brokerId ?? null },
       orderBy: { code: 'asc' },
     });
 
-    // One grouped query for every account, rather than one query per account —
-    // the balance table is small but the line table is not.
     const sums = await this.prisma.ledgerLine.groupBy({
       by: ['accountId'],
       where: {
@@ -86,22 +66,8 @@ export class ReportsService {
       const debit = dec(sum?.debit);
       const credit = dec(sum?.credit);
       const net = money(debit - credit);
-
-      // Assets and expenses grow on the debit side; the other three types are
-      // the reverse. Presenting them in their natural sign is what makes the
-      // report readable to an accountant.
-      const flip = a.type === AccountType.LIABILITY || a.type === AccountType.EQUITY ||
-        a.type === AccountType.REVENUE;
-      return {
-        accountId: a.id,
-        code: a.code,
-        name: a.name,
-        type: a.type,
-        debit,
-        credit,
-        net,
-        balance: flip ? -net : net,
-      };
+      const flip = a.type === AccountType.LIABILITY || a.type === AccountType.EQUITY || a.type === AccountType.REVENUE;
+      return { accountId: a.id, code: a.code, name: a.name, type: a.type, debit, credit, net, balance: flip ? -net : net };
     });
 
     const totalDebit = money(rows.reduce((s, r) => s + r.debit, 0));
@@ -111,35 +77,19 @@ export class ReportsService {
     return { rows, totalDebit, totalCredit, difference, balanced: difference === 0 };
   }
 
-  /**
-   * Buy/sell report (خرید و فروش) — volume, value and commission per symbol.
-   *
-   * Answers "how much gold did we buy from and sell to customers, at what
-   * average price" — the trading desk's daily close.
-   */
+  // ── 2. Trade report ────────────────────────────────────────────────────────
+
   async tradeReport(
     range: DateRange = {},
-    opts: { symbol?: string; userId?: string } = {},
-  ): Promise<{
-    rows: Array<{
-      symbol: string;
-      side: 'BUY' | 'SELL';
-      orderCount: number;
-      totalGrams: number;
-      totalAmount: number;
-      totalFee: number;
-      /// Weighted-average execution price across the orders.
-      avgPrice: number;
-      realisedPnl: number;
-    }>;
-    totals: { orders: number; grams: number; amount: number; fee: number; pnl: number };
-  }> {
+    opts: { symbol?: string; userId?: string; brokerId?: string | null } = {},
+  ) {
     const where: Prisma.OrderWhereInput = {
       status: 'FILLED',
-      createdAt: range.from || range.to ? { gte: range.from, lte: range.to } : undefined,
-      symbol: opts.symbol,
-      userId: opts.userId,
+      createdAt: this.dateFilter(range),
+      symbol: opts.symbol || undefined,
+      userId: opts.userId || undefined,
     };
+    if (opts.brokerId) where.user = { brokerId: opts.brokerId };
 
     const grouped = await this.prisma.order.groupBy({
       by: ['symbol', 'side'],
@@ -158,13 +108,10 @@ export class ReportsService {
         totalGrams,
         totalAmount,
         totalFee: money(dec(g._sum.fee)),
-        // Amount/grams rather than averaging the per-order prices, so a large
-        // order is not outweighed by a small one.
         avgPrice: totalGrams > 0 ? money(totalAmount / totalGrams) : 0,
         realisedPnl: money(dec(g._sum.pnl)),
       };
     });
-
     rows.sort((a, b) => a.symbol.localeCompare(b.symbol) || a.side.localeCompare(b.side));
 
     return {
@@ -177,5 +124,240 @@ export class ReportsService {
         pnl: money(rows.reduce((s, r) => s + r.realisedPnl, 0)),
       },
     };
+  }
+
+  // ── 3. Order list ─────────────────────────────────────────────────────────
+
+  async orderList(
+    range: DateRange = {},
+    opts: {
+      symbol?: string;
+      side?: string;
+      status?: string;
+      kind?: string;
+      userId?: string;
+      brokerId?: string | null;
+      limit?: number;
+    } = {},
+  ) {
+    const where: Prisma.OrderWhereInput = {
+      createdAt: this.dateFilter(range),
+      symbol: opts.symbol || undefined,
+      side: (opts.side as any) || undefined,
+      status: (opts.status as any) || undefined,
+      kind: (opts.kind as any) || undefined,
+      userId: opts.userId || undefined,
+    };
+    if (opts.brokerId) where.user = { brokerId: opts.brokerId };
+
+    const rows = await this.prisma.order.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(opts.limit ?? 500, 5000),
+      include: { user: { select: { name: true, phone: true, brokerId: true } } },
+    });
+
+    return rows.map(o => ({
+      ref: o.ref,
+      symbol: o.symbol,
+      side: o.side,
+      kind: o.kind,
+      status: o.status,
+      grams: Number(o.grams),
+      price: money(dec(o.price)),
+      amount: money(dec(o.amount)),
+      fee: money(dec(o.fee)),
+      pnl: o.pnl == null ? null : money(dec(o.pnl)),
+      userName: o.user?.name ?? '',
+      userPhone: o.user?.phone ?? '',
+      createdAt: o.createdAt,
+    }));
+  }
+
+  // ── 4. Customer report ────────────────────────────────────────────────────
+
+  async customerReport(
+    range: DateRange = {},
+    opts: { brokerId?: string | null; verified?: boolean; status?: string } = {},
+  ) {
+    const where: Prisma.UserWhereInput = {
+      role: 'CUSTOMER',
+      createdAt: this.dateFilter(range),
+      brokerId: opts.brokerId || undefined,
+      verifiedAt: opts.verified === true ? { not: null } : opts.verified === false ? null : undefined,
+      status: (opts.status as any) || undefined,
+    };
+
+    const rows = await this.prisma.user.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        wallet: { select: { balance: true, realizedPnl: true } },
+        _count: { select: { orders: true } },
+      },
+    });
+
+    return rows.map(u => ({
+      name: u.name,
+      phone: u.phone ?? '',
+      email: u.email ?? '',
+      nationalId: u.nationalId ?? '',
+      status: u.status,
+      verified: u.verifiedAt != null,
+      balance: money(dec(u.wallet?.balance)),
+      realizedPnl: money(dec(u.wallet?.realizedPnl)),
+      orderCount: u._count.orders,
+      createdAt: u.createdAt,
+    }));
+  }
+
+  // ── 5. Wallet / balance report ────────────────────────────────────────────
+
+  async walletReport(opts: { brokerId?: string | null; minBalance?: number; maxBalance?: number } = {}) {
+    const where: Prisma.WalletWhereInput = {};
+    if (opts.brokerId) where.user = { brokerId: opts.brokerId };
+    if (opts.minBalance != null) where.balance = { gte: opts.minBalance };
+    if (opts.maxBalance != null) {
+      where.balance = { ...(where.balance as any), lte: opts.maxBalance };
+    }
+
+    const rows = await this.prisma.wallet.findMany({
+      where,
+      orderBy: { balance: 'desc' },
+      include: {
+        user: { select: { name: true, phone: true, brokerId: true } },
+        positions: { select: { symbol: true, grams: true, avgCost: true } },
+      },
+    });
+
+    return rows.map(w => ({
+      userName: w.user?.name ?? '',
+      userPhone: w.user?.phone ?? '',
+      balance: money(dec(w.balance)),
+      realizedPnl: money(dec(w.realizedPnl)),
+      positions: w.positions.map(p => ({
+        symbol: p.symbol,
+        grams: Number(p.grams),
+        avgCost: money(dec(p.avgCost)),
+      })),
+    }));
+  }
+
+  // ── 6. Deposit / withdrawal report ────────────────────────────────────────
+
+  async cashMovementReport(
+    range: DateRange = {},
+    opts: {
+      kind: 'deposit' | 'withdrawal';
+      status?: string;
+      brokerId?: string | null;
+    },
+  ) {
+    if (opts.kind === 'deposit') {
+      const where: Prisma.DepositWhereInput = {
+        createdAt: this.dateFilter(range),
+        status: (opts.status as any) || undefined,
+      };
+      if (opts.brokerId) where.wallet = { user: { brokerId: opts.brokerId } };
+
+      const rows = await this.prisma.deposit.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        include: { wallet: { include: { user: { select: { name: true, phone: true } } } } },
+      });
+
+      return rows.map(d => ({
+        ref: d.ref,
+        kind: 'واریز',
+        userName: d.wallet?.user?.name ?? '',
+        userPhone: d.wallet?.user?.phone ?? '',
+        amount: money(dec(d.amount)),
+        status: d.status,
+        method: d.method,
+        note: d.note ?? '',
+        createdAt: d.createdAt,
+      }));
+    }
+
+    // withdrawal
+    const where: Prisma.WithdrawalWhereInput = {
+      createdAt: this.dateFilter(range),
+      status: (opts.status as any) || undefined,
+    };
+    if (opts.brokerId) where.wallet = { user: { brokerId: opts.brokerId } };
+
+    const rows = await this.prisma.withdrawal.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: { wallet: { include: { user: { select: { name: true, phone: true } } } } },
+    });
+
+    return rows.map(w => ({
+      ref: w.ref,
+      kind: 'برداشت',
+      userName: w.wallet?.user?.name ?? '',
+      userPhone: w.wallet?.user?.phone ?? '',
+      amount: money(dec(w.amount)),
+      fee: money(dec(w.fee)),
+      status: w.status,
+      destination: w.destination ?? '',
+      note: w.note ?? '',
+      createdAt: w.createdAt,
+    }));
+  }
+
+  // ── 7. Position / gold holdings report ────────────────────────────────────
+
+  async positionReport(opts: { symbol?: string; brokerId?: string | null } = {}) {
+    const where: Prisma.PositionWhereInput = {
+      grams: { gt: 0 },
+      symbol: opts.symbol || undefined,
+    };
+    if (opts.brokerId) where.wallet = { user: { brokerId: opts.brokerId } };
+
+    const rows = await this.prisma.position.findMany({
+      where,
+      orderBy: [{ symbol: 'asc' }, { grams: 'desc' }],
+      include: { wallet: { include: { user: { select: { name: true, phone: true } } } } },
+    });
+
+    return rows.map(p => ({
+      userName: p.wallet?.user?.name ?? '',
+      userPhone: p.wallet?.user?.phone ?? '',
+      symbol: p.symbol,
+      grams: Number(p.grams),
+      avgCost: money(dec(p.avgCost)),
+      value: money(Number(p.grams) * dec(p.avgCost)),
+    }));
+  }
+
+  // ── 8. Ledger entries ────────────────────────────────────────────────────
+
+  async ledgerReport(
+    range: DateRange = {},
+    opts: { kind?: string; brokerId?: string | null; limit?: number } = {},
+  ) {
+    const where: Prisma.LedgerEntryWhereInput = {
+      postedAt: this.dateFilter(range),
+      kind: (opts.kind as any) || undefined,
+    };
+    if (opts.brokerId) where.wallet = { user: { brokerId: opts.brokerId } };
+
+    const rows = await this.prisma.ledgerEntry.findMany({
+      where,
+      orderBy: { postedAt: 'desc' },
+      take: Math.min(opts.limit ?? 500, 5000),
+      include: { user: { select: { name: true } } },
+    });
+
+    return rows.map(e => ({
+      ref: e.ref,
+      kind: e.kind,
+      memo: e.memo,
+      totalDebit: money(dec(e.totalDebit)),
+      totalCredit: money(dec(e.totalCredit)),
+      userName: e.user?.name ?? '',
+      postedAt: e.postedAt,
+    }));
   }
 }

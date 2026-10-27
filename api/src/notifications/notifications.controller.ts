@@ -1,9 +1,10 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, forwardRef, Get, HttpCode, Inject, Param, Patch, Post } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { IsIn, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { CurrentUser, type AuthUser } from '../auth/current-user.decorator';
 import { Roles } from '../auth/roles.decorator';
 import { NotificationsService } from './notifications.service';
+import { PushService } from '../push/push.service';
 
 class BroadcastDto {
   @IsString()
@@ -25,7 +26,10 @@ class BroadcastDto {
 
 @Controller('notifications')
 export class NotificationsController {
-  constructor(private readonly svc: NotificationsService) {}
+  constructor(
+    private readonly svc: NotificationsService,
+    @Inject(forwardRef(() => PushService)) private readonly push: PushService,
+  ) {}
 
   @Get()
   async list(@CurrentUser() user: AuthUser) {
@@ -58,6 +62,17 @@ export class NotificationsController {
   @Roles(Role.BROKER_ADMIN, Role.BROKER_MANAGER, Role.SUPER_ADMIN)
   async broadcast(@CurrentUser() user: AuthUser, @Body() dto: BroadcastDto) {
     const result = await this.svc.broadcast(user, dto);
-    return { success: true, data: result };
+    // Fire push notifications to all recipients — fire-and-forget so a slow
+    // or missing push subscription never delays the HTTP response.
+    if (result.userIds.length) {
+      void this.push.sendToUsers(result.userIds, {
+        title: dto.title,
+        body: dto.body,
+        icon: '/icons/icon-192x192.png',
+        tag: 'BROADCAST',
+        data: dto.url ? { url: dto.url } : undefined,
+      });
+    }
+    return { success: true, data: { count: result.count } };
   }
 }
