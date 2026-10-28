@@ -673,6 +673,17 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  /** Recent orders of every kind in the caller's broker (staff only). */
+  async function brokerOrders() {
+    try {
+      const data = await api.get('/trade/broker-orders');
+      return Array.isArray(data) ? data : (data?.orders ?? []);
+    } catch (e) {
+      error.value = e.message || 'دریافت سفارش‌ها ناموفق بود';
+      return [];
+    }
+  }
+
   async function reviewOrder(orderId, approve, note = '') {
     loading.value = true;
     error.value = '';
@@ -775,6 +786,7 @@ export const useAuthStore = defineStore('auth', () => {
     placeOrder,
     submitReceipt,
     reviewQueue,
+    brokerOrders,
     reviewOrder,
     fulfillOrder,
     directory,

@@ -49,9 +49,9 @@
               <i class="material-icons">scale</i>
               {{ o.grams }} گرم
             </span>
-            <span v-if="o.totalAmount" class="detail__item tnum">
+            <span v-if="o.amount" class="detail__item tnum">
               <i class="material-icons">payments</i>
-              {{ faMoney(o.totalAmount) }}
+              {{ faMoney(o.amount) }}
             </span>
             <span v-if="o.fulfilledAt || o.fulfilled" class="badge is-done">
               <i class="material-icons">check_circle</i> تحویل‌شده
@@ -127,6 +127,28 @@
 
         </li>
       </ul>
+
+      <!-- Every recent order in this broker: wallet trades settle instantly and
+           never enter the queue above, so they are listed here. -->
+      <h2 class="section-title">همه سفارش‌های اخیر</h2>
+      <p v-if="!recent.length" class="empty__hint">سفارشی ثبت نشده است</p>
+      <ul v-else class="recent">
+        <li v-for="o in recent" :key="o.id" class="recent__row">
+          <div class="recent__main">
+            <b class="tnum">{{ o.ref }}</b>
+            <span class="side-badge" :class="o.side === 'SELL' ? 'is-sell' : 'is-buy'">
+              {{ o.side === 'SELL' ? 'فروش' : 'خرید' }}
+            </span>
+            <span class="symbol tnum">{{ o.symbol }}</span>
+            <span class="recent__kind">{{ o.kind === 'MANUAL' ? 'کارت به کارت' : 'کیف پول' }}</span>
+          </div>
+          <div class="recent__meta">
+            <span>{{ o.customerName || o.customerPhone || '—' }}</span>
+            <span class="tnum">{{ o.grams }} گرم · {{ faMoney(o.amount) }}</span>
+            <span class="badge" :class="statusClass(o)">{{ o.status === 'FILLED' ? 'انجام‌شده' : statusFa(o) }}</span>
+          </div>
+        </li>
+      </ul>
     </template>
   </div>
 </template>
@@ -140,6 +162,7 @@ import { downloadOrderReceipt } from '../utils/receipt.js'
 
 const auth = useAuthStore()
 const orders = ref([])
+const recent = ref([])
 const loading = ref(false)
 const notes = reactive({})
 const downloadBusy = reactive({})
@@ -161,14 +184,18 @@ function statusClass(o) {
   const s = String(o.status || '').toUpperCase()
   if (s.includes('REJECT')) return 'is-reject'
   if (s.includes('APPROV') || s.includes('CONFIRM')) return 'is-ok'
-  if (s.includes('FULFILL')) return 'is-done'
+  if (s.includes('FULFILL') || s === 'FILLED') return 'is-done'
   if (s === 'AWAITING_RECEIPT') return 'is-muted'
   return 'is-warn'
 }
 
 async function load() {
   loading.value = true
-  try { orders.value = await auth.reviewQueue() } finally { loading.value = false }
+  try {
+    const [queue, all] = await Promise.all([auth.reviewQueue(), auth.brokerOrders()])
+    orders.value = queue
+    recent.value = all
+  } finally { loading.value = false }
 }
 
 async function review(id, approve) {
@@ -396,4 +423,10 @@ onMounted(() => { if (auth.isLoggedIn) load() })
 .awaiting-hint { display: flex; align-items: center; gap: 6px; margin: 4px 0 0; font-size: 12px; color: var(--text-muted); }
 .awaiting-hint .material-icons { font-size: 16px; }
 .badge.is-muted { background: var(--surface); color: var(--text-muted); }
+.section-title { margin: 24px 0 10px; font-size: 15px; font-weight: 900; }
+.recent { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.recent__row { padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--card); display: flex; flex-direction: column; gap: 6px; }
+.recent__main, .recent__meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
+.recent__meta { justify-content: space-between; color: var(--text-muted); }
+.recent__kind { margin-inline-start: auto; font-size: 11.5px; color: var(--text-muted); }
 </style>

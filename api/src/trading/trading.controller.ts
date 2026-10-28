@@ -130,6 +130,13 @@ export class TradingController {
     return this.trading.reviewQueue(user);
   }
 
+  /** Recent orders of every kind in this broker, wallet trades included. */
+  @Roles(...STAFF)
+  @Get('broker-orders')
+  brokerOrders(@CurrentUser() user: AuthUser) {
+    return this.trading.brokerOrders(user);
+  }
+
   /**
    * Approves or rejecting a MANUAL order. Approving is what finally credits the
    * customer their gold — the bank transfer has been checked by hand, so the

@@ -570,6 +570,24 @@ export class TradingService {
   }
 
   /**
+   * Every recent order in the caller's broker — wallet trades included, which
+   * settle instantly and so never pass through the review queue. Same broker
+   * scoping as `reviewQueue`.
+   */
+  async brokerOrders(
+    actor: { userId: string; role: string; brokerId: string | null },
+    limit = 100,
+  ): Promise<Array<OrderView & { customerName: string | null; customerPhone: string | null }>> {
+    const rows = await this.prisma.order.findMany({
+      where: actor.role === 'SUPER_ADMIN' ? {} : { user: { brokerId: actor.brokerId ?? NO_BROKER } },
+      include: { user: { select: { name: true, phone: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(Math.max(limit, 1), 500),
+    });
+    return rows.map(o => ({ ...toOrderView(o), customerName: o.user?.name ?? null, customerPhone: o.user?.phone ?? null }));
+  }
+
+  /**
    * Approves or rejects a MANUAL order.
    *
    * Approving is what finally credits the customer their gold — the payment has
