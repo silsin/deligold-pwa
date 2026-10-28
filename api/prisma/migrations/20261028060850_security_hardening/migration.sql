@@ -1,5 +1,5 @@
--- CreateTable
-CREATE TABLE "User" (
+﻿-- CreateTable
+CREATE TABLE IF NOT EXISTS "User" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "phone" TEXT,
     "email" TEXT,
@@ -26,7 +26,7 @@ CREATE TABLE "User" (
 );
 
 -- CreateTable
-CREATE TABLE "Broker" (
+CREATE TABLE IF NOT EXISTS "Broker" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "name" TEXT NOT NULL,
     "slug" TEXT NOT NULL,
@@ -35,7 +35,7 @@ CREATE TABLE "Broker" (
 );
 
 -- CreateTable
-CREATE TABLE "Store" (
+CREATE TABLE IF NOT EXISTS "Store" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "brokerId" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -50,7 +50,7 @@ CREATE TABLE "Store" (
 );
 
 -- CreateTable
-CREATE TABLE "StoreProduct" (
+CREATE TABLE IF NOT EXISTS "StoreProduct" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "storeId" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -65,7 +65,7 @@ CREATE TABLE "StoreProduct" (
 );
 
 -- CreateTable
-CREATE TABLE "Session" (
+CREATE TABLE IF NOT EXISTS "Session" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "userId" TEXT NOT NULL,
     "tokenHash" TEXT NOT NULL,
@@ -77,7 +77,7 @@ CREATE TABLE "Session" (
 );
 
 -- CreateTable
-CREATE TABLE "Invite" (
+CREATE TABLE IF NOT EXISTS "Invite" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "code" TEXT NOT NULL,
     "brokerId" TEXT NOT NULL,
@@ -93,7 +93,7 @@ CREATE TABLE "Invite" (
 );
 
 -- CreateTable
-CREATE TABLE "CustomerPermission" (
+CREATE TABLE IF NOT EXISTS "CustomerPermission" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "userId" TEXT NOT NULL,
     "symbol" TEXT NOT NULL,
@@ -106,7 +106,7 @@ CREATE TABLE "CustomerPermission" (
 );
 
 -- CreateTable
-CREATE TABLE "Wallet" (
+CREATE TABLE IF NOT EXISTS "Wallet" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "userId" TEXT NOT NULL,
     "balance" DECIMAL NOT NULL DEFAULT 0,
@@ -119,7 +119,7 @@ CREATE TABLE "Wallet" (
 );
 
 -- CreateTable
-CREATE TABLE "Position" (
+CREATE TABLE IF NOT EXISTS "Position" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "walletId" TEXT NOT NULL,
     "symbol" TEXT NOT NULL,
@@ -131,7 +131,7 @@ CREATE TABLE "Position" (
 );
 
 -- CreateTable
-CREATE TABLE "Order" (
+CREATE TABLE IF NOT EXISTS "Order" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "ref" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
@@ -161,7 +161,7 @@ CREATE TABLE "Order" (
 );
 
 -- CreateTable
-CREATE TABLE "Convert" (
+CREATE TABLE IF NOT EXISTS "Convert" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "ref" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
@@ -175,7 +175,7 @@ CREATE TABLE "Convert" (
 );
 
 -- CreateTable
-CREATE TABLE "Deposit" (
+CREATE TABLE IF NOT EXISTS "Deposit" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "ref" TEXT NOT NULL,
     "walletId" TEXT NOT NULL,
@@ -191,7 +191,7 @@ CREATE TABLE "Deposit" (
 );
 
 -- CreateTable
-CREATE TABLE "Withdrawal" (
+CREATE TABLE IF NOT EXISTS "Withdrawal" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "ref" TEXT NOT NULL,
     "walletId" TEXT NOT NULL,
@@ -208,7 +208,7 @@ CREATE TABLE "Withdrawal" (
 );
 
 -- CreateTable
-CREATE TABLE "Account" (
+CREATE TABLE IF NOT EXISTS "Account" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "code" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -222,7 +222,7 @@ CREATE TABLE "Account" (
 );
 
 -- CreateTable
-CREATE TABLE "LedgerEntry" (
+CREATE TABLE IF NOT EXISTS "LedgerEntry" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "ref" TEXT NOT NULL,
     "postedAt" DATETIME NOT NULL,
@@ -240,7 +240,7 @@ CREATE TABLE "LedgerEntry" (
 );
 
 -- CreateTable
-CREATE TABLE "LedgerLine" (
+CREATE TABLE IF NOT EXISTS "LedgerLine" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "entryId" TEXT NOT NULL,
     "accountId" TEXT NOT NULL,
@@ -253,7 +253,7 @@ CREATE TABLE "LedgerLine" (
 );
 
 -- CreateTable
-CREATE TABLE "StoreHolding" (
+CREATE TABLE IF NOT EXISTS "StoreHolding" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "storeId" TEXT NOT NULL,
     "symbol" TEXT NOT NULL,
@@ -264,7 +264,7 @@ CREATE TABLE "StoreHolding" (
 );
 
 -- CreateTable
-CREATE TABLE "StoreMovement" (
+CREATE TABLE IF NOT EXISTS "StoreMovement" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "storeId" TEXT NOT NULL,
     "symbol" TEXT NOT NULL,
@@ -279,7 +279,7 @@ CREATE TABLE "StoreMovement" (
 );
 
 -- CreateTable
-CREATE TABLE "BoardPrice" (
+CREATE TABLE IF NOT EXISTS "BoardPrice" (
     "symbol" TEXT NOT NULL PRIMARY KEY,
     "price" DECIMAL,
     "buy" DECIMAL,
@@ -292,7 +292,7 @@ CREATE TABLE "BoardPrice" (
 );
 
 -- CreateTable
-CREATE TABLE "BrokerPriceRule" (
+CREATE TABLE IF NOT EXISTS "BrokerPriceRule" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "brokerId" TEXT NOT NULL,
     "symbol" TEXT NOT NULL,
@@ -310,7 +310,7 @@ CREATE TABLE "BrokerPriceRule" (
 );
 
 -- CreateTable
-CREATE TABLE "AuditLog" (
+CREATE TABLE IF NOT EXISTS "AuditLog" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "actorId" TEXT,
     "action" TEXT NOT NULL,
@@ -324,7 +324,7 @@ CREATE TABLE "AuditLog" (
 );
 
 -- CreateTable
-CREATE TABLE "RoleChange" (
+CREATE TABLE IF NOT EXISTS "RoleChange" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "targetId" TEXT NOT NULL,
     "granterId" TEXT,
@@ -337,7 +337,7 @@ CREATE TABLE "RoleChange" (
 );
 
 -- CreateTable
-CREATE TABLE "PushSubscription" (
+CREATE TABLE IF NOT EXISTS "PushSubscription" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "userId" TEXT NOT NULL,
     "endpoint" TEXT NOT NULL,
@@ -347,7 +347,7 @@ CREATE TABLE "PushSubscription" (
 );
 
 -- CreateTable
-CREATE TABLE "Notification" (
+CREATE TABLE IF NOT EXISTS "Notification" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "userId" TEXT NOT NULL,
     "title" TEXT NOT NULL,
@@ -360,7 +360,7 @@ CREATE TABLE "Notification" (
 );
 
 -- CreateTable
-CREATE TABLE "PriceSource" (
+CREATE TABLE IF NOT EXISTS "PriceSource" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "name" TEXT NOT NULL,
     "kind" TEXT NOT NULL,
@@ -374,7 +374,7 @@ CREATE TABLE "PriceSource" (
 );
 
 -- CreateTable
-CREATE TABLE "PriceTick" (
+CREATE TABLE IF NOT EXISTS "PriceTick" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "symbol" TEXT NOT NULL,
     "source" TEXT NOT NULL,
@@ -385,7 +385,7 @@ CREATE TABLE "PriceTick" (
 );
 
 -- CreateTable
-CREATE TABLE "ChartAnnotation" (
+CREATE TABLE IF NOT EXISTS "ChartAnnotation" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "symbol" TEXT NOT NULL,
     "source" TEXT,
@@ -399,157 +399,158 @@ CREATE TABLE "ChartAnnotation" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "User_phone_key" ON "User"("phone");
+CREATE UNIQUE INDEX IF NOT EXISTS "User_phone_key" ON "User"("phone");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+CREATE UNIQUE INDEX IF NOT EXISTS "User_email_key" ON "User"("email");
 
 -- CreateIndex
-CREATE INDEX "User_role_idx" ON "User"("role");
+CREATE INDEX IF NOT EXISTS "User_role_idx" ON "User"("role");
 
 -- CreateIndex
-CREATE INDEX "User_brokerId_idx" ON "User"("brokerId");
+CREATE INDEX IF NOT EXISTS "User_brokerId_idx" ON "User"("brokerId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Broker_slug_key" ON "Broker"("slug");
+CREATE UNIQUE INDEX IF NOT EXISTS "Broker_slug_key" ON "Broker"("slug");
 
 -- CreateIndex
-CREATE INDEX "StoreProduct_storeId_idx" ON "StoreProduct"("storeId");
+CREATE INDEX IF NOT EXISTS "StoreProduct_storeId_idx" ON "StoreProduct"("storeId");
 
 -- CreateIndex
-CREATE INDEX "Session_userId_idx" ON "Session"("userId");
+CREATE INDEX IF NOT EXISTS "Session_userId_idx" ON "Session"("userId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Invite_code_key" ON "Invite"("code");
+CREATE UNIQUE INDEX IF NOT EXISTS "Invite_code_key" ON "Invite"("code");
 
 -- CreateIndex
-CREATE INDEX "Invite_brokerId_idx" ON "Invite"("brokerId");
+CREATE INDEX IF NOT EXISTS "Invite_brokerId_idx" ON "Invite"("brokerId");
 
 -- CreateIndex
-CREATE INDEX "CustomerPermission_userId_idx" ON "CustomerPermission"("userId");
+CREATE INDEX IF NOT EXISTS "CustomerPermission_userId_idx" ON "CustomerPermission"("userId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "CustomerPermission_userId_symbol_key" ON "CustomerPermission"("userId", "symbol");
+CREATE UNIQUE INDEX IF NOT EXISTS "CustomerPermission_userId_symbol_key" ON "CustomerPermission"("userId", "symbol");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Wallet_userId_key" ON "Wallet"("userId");
+CREATE UNIQUE INDEX IF NOT EXISTS "Wallet_userId_key" ON "Wallet"("userId");
 
 -- CreateIndex
-CREATE INDEX "Position_symbol_idx" ON "Position"("symbol");
+CREATE INDEX IF NOT EXISTS "Position_symbol_idx" ON "Position"("symbol");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Position_walletId_symbol_key" ON "Position"("walletId", "symbol");
+CREATE UNIQUE INDEX IF NOT EXISTS "Position_walletId_symbol_key" ON "Position"("walletId", "symbol");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Order_ref_key" ON "Order"("ref");
+CREATE UNIQUE INDEX IF NOT EXISTS "Order_ref_key" ON "Order"("ref");
 
 -- CreateIndex
-CREATE INDEX "Order_userId_createdAt_idx" ON "Order"("userId", "createdAt");
+CREATE INDEX IF NOT EXISTS "Order_userId_createdAt_idx" ON "Order"("userId", "createdAt");
 
 -- CreateIndex
-CREATE INDEX "Order_symbol_createdAt_idx" ON "Order"("symbol", "createdAt");
+CREATE INDEX IF NOT EXISTS "Order_symbol_createdAt_idx" ON "Order"("symbol", "createdAt");
 
 -- CreateIndex
-CREATE INDEX "Order_kind_createdAt_idx" ON "Order"("kind", "createdAt");
+CREATE INDEX IF NOT EXISTS "Order_kind_createdAt_idx" ON "Order"("kind", "createdAt");
 
 -- CreateIndex
-CREATE INDEX "Order_status_createdAt_idx" ON "Order"("status", "createdAt");
+CREATE INDEX IF NOT EXISTS "Order_status_createdAt_idx" ON "Order"("status", "createdAt");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Convert_ref_key" ON "Convert"("ref");
+CREATE UNIQUE INDEX IF NOT EXISTS "Convert_ref_key" ON "Convert"("ref");
 
 -- CreateIndex
-CREATE INDEX "Convert_userId_createdAt_idx" ON "Convert"("userId", "createdAt");
+CREATE INDEX IF NOT EXISTS "Convert_userId_createdAt_idx" ON "Convert"("userId", "createdAt");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Deposit_ref_key" ON "Deposit"("ref");
+CREATE UNIQUE INDEX IF NOT EXISTS "Deposit_ref_key" ON "Deposit"("ref");
 
 -- CreateIndex
-CREATE INDEX "Deposit_walletId_createdAt_idx" ON "Deposit"("walletId", "createdAt");
+CREATE INDEX IF NOT EXISTS "Deposit_walletId_createdAt_idx" ON "Deposit"("walletId", "createdAt");
 
 -- CreateIndex
-CREATE INDEX "Deposit_status_idx" ON "Deposit"("status");
+CREATE INDEX IF NOT EXISTS "Deposit_status_idx" ON "Deposit"("status");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Withdrawal_ref_key" ON "Withdrawal"("ref");
+CREATE UNIQUE INDEX IF NOT EXISTS "Withdrawal_ref_key" ON "Withdrawal"("ref");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Withdrawal_idempotencyKey_key" ON "Withdrawal"("idempotencyKey");
+CREATE UNIQUE INDEX IF NOT EXISTS "Withdrawal_idempotencyKey_key" ON "Withdrawal"("idempotencyKey");
 
 -- CreateIndex
-CREATE INDEX "Withdrawal_walletId_createdAt_idx" ON "Withdrawal"("walletId", "createdAt");
+CREATE INDEX IF NOT EXISTS "Withdrawal_walletId_createdAt_idx" ON "Withdrawal"("walletId", "createdAt");
 
 -- CreateIndex
-CREATE INDEX "Withdrawal_status_idx" ON "Withdrawal"("status");
+CREATE INDEX IF NOT EXISTS "Withdrawal_status_idx" ON "Withdrawal"("status");
 
 -- CreateIndex
-CREATE INDEX "Account_type_idx" ON "Account"("type");
+CREATE INDEX IF NOT EXISTS "Account_type_idx" ON "Account"("type");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Account_code_brokerId_symbol_key" ON "Account"("code", "brokerId", "symbol");
+CREATE UNIQUE INDEX IF NOT EXISTS "Account_code_brokerId_symbol_key" ON "Account"("code", "brokerId", "symbol");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "LedgerEntry_ref_key" ON "LedgerEntry"("ref");
+CREATE UNIQUE INDEX IF NOT EXISTS "LedgerEntry_ref_key" ON "LedgerEntry"("ref");
 
 -- CreateIndex
-CREATE INDEX "LedgerEntry_userId_postedAt_idx" ON "LedgerEntry"("userId", "postedAt");
+CREATE INDEX IF NOT EXISTS "LedgerEntry_userId_postedAt_idx" ON "LedgerEntry"("userId", "postedAt");
 
 -- CreateIndex
-CREATE INDEX "LedgerEntry_walletId_postedAt_idx" ON "LedgerEntry"("walletId", "postedAt");
+CREATE INDEX IF NOT EXISTS "LedgerEntry_walletId_postedAt_idx" ON "LedgerEntry"("walletId", "postedAt");
 
 -- CreateIndex
-CREATE INDEX "LedgerEntry_kind_postedAt_idx" ON "LedgerEntry"("kind", "postedAt");
+CREATE INDEX IF NOT EXISTS "LedgerEntry_kind_postedAt_idx" ON "LedgerEntry"("kind", "postedAt");
 
 -- CreateIndex
-CREATE INDEX "LedgerLine_entryId_idx" ON "LedgerLine"("entryId");
+CREATE INDEX IF NOT EXISTS "LedgerLine_entryId_idx" ON "LedgerLine"("entryId");
 
 -- CreateIndex
-CREATE INDEX "LedgerLine_accountId_idx" ON "LedgerLine"("accountId");
+CREATE INDEX IF NOT EXISTS "LedgerLine_accountId_idx" ON "LedgerLine"("accountId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "StoreHolding_storeId_symbol_key" ON "StoreHolding"("storeId", "symbol");
+CREATE UNIQUE INDEX IF NOT EXISTS "StoreHolding_storeId_symbol_key" ON "StoreHolding"("storeId", "symbol");
 
 -- CreateIndex
-CREATE INDEX "StoreMovement_storeId_createdAt_idx" ON "StoreMovement"("storeId", "createdAt");
+CREATE INDEX IF NOT EXISTS "StoreMovement_storeId_createdAt_idx" ON "StoreMovement"("storeId", "createdAt");
 
 -- CreateIndex
-CREATE INDEX "BrokerPriceRule_brokerId_idx" ON "BrokerPriceRule"("brokerId");
+CREATE INDEX IF NOT EXISTS "BrokerPriceRule_brokerId_idx" ON "BrokerPriceRule"("brokerId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "BrokerPriceRule_brokerId_symbol_targetRole_key" ON "BrokerPriceRule"("brokerId", "symbol", "targetRole");
+CREATE UNIQUE INDEX IF NOT EXISTS "BrokerPriceRule_brokerId_symbol_targetRole_key" ON "BrokerPriceRule"("brokerId", "symbol", "targetRole");
 
 -- CreateIndex
-CREATE INDEX "AuditLog_actorId_createdAt_idx" ON "AuditLog"("actorId", "createdAt");
+CREATE INDEX IF NOT EXISTS "AuditLog_actorId_createdAt_idx" ON "AuditLog"("actorId", "createdAt");
 
 -- CreateIndex
-CREATE INDEX "AuditLog_entity_entityId_idx" ON "AuditLog"("entity", "entityId");
+CREATE INDEX IF NOT EXISTS "AuditLog_entity_entityId_idx" ON "AuditLog"("entity", "entityId");
 
 -- CreateIndex
-CREATE INDEX "RoleChange_targetId_createdAt_idx" ON "RoleChange"("targetId", "createdAt");
+CREATE INDEX IF NOT EXISTS "RoleChange_targetId_createdAt_idx" ON "RoleChange"("targetId", "createdAt");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "PushSubscription_endpoint_key" ON "PushSubscription"("endpoint");
+CREATE UNIQUE INDEX IF NOT EXISTS "PushSubscription_endpoint_key" ON "PushSubscription"("endpoint");
 
 -- CreateIndex
-CREATE INDEX "PushSubscription_userId_idx" ON "PushSubscription"("userId");
+CREATE INDEX IF NOT EXISTS "PushSubscription_userId_idx" ON "PushSubscription"("userId");
 
 -- CreateIndex
-CREATE INDEX "Notification_userId_createdAt_idx" ON "Notification"("userId", "createdAt");
+CREATE INDEX IF NOT EXISTS "Notification_userId_createdAt_idx" ON "Notification"("userId", "createdAt");
 
 -- CreateIndex
-CREATE INDEX "Notification_userId_read_idx" ON "Notification"("userId", "read");
+CREATE INDEX IF NOT EXISTS "Notification_userId_read_idx" ON "Notification"("userId", "read");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "PriceSource_name_key" ON "PriceSource"("name");
+CREATE UNIQUE INDEX IF NOT EXISTS "PriceSource_name_key" ON "PriceSource"("name");
 
 -- CreateIndex
-CREATE INDEX "PriceSource_enabled_priority_idx" ON "PriceSource"("enabled", "priority");
+CREATE INDEX IF NOT EXISTS "PriceSource_enabled_priority_idx" ON "PriceSource"("enabled", "priority");
 
 -- CreateIndex
-CREATE INDEX "PriceTick_symbol_source_recordedAt_idx" ON "PriceTick"("symbol", "source", "recordedAt");
+CREATE INDEX IF NOT EXISTS "PriceTick_symbol_source_recordedAt_idx" ON "PriceTick"("symbol", "source", "recordedAt");
 
 -- CreateIndex
-CREATE INDEX "PriceTick_source_recordedAt_idx" ON "PriceTick"("source", "recordedAt");
+CREATE INDEX IF NOT EXISTS "PriceTick_source_recordedAt_idx" ON "PriceTick"("source", "recordedAt");
 
 -- CreateIndex
-CREATE INDEX "ChartAnnotation_symbol_source_idx" ON "ChartAnnotation"("symbol", "source");
+CREATE INDEX IF NOT EXISTS "ChartAnnotation_symbol_source_idx" ON "ChartAnnotation"("symbol", "source");
+

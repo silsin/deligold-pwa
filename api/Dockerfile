@@ -39,11 +39,20 @@ EXPOSE 7456
 HEALTHCHECK --interval=30s --timeout=3s --start-period=20s --retries=3 \
   CMD wget --quiet --tries=1 --spider http://127.0.0.1:7456/market/board || exit 1
 
-# Boot: apply the schema, seed, then start Nest.
+# Boot: apply pending migrations, seed, then start Nest.
 #
-# Every binary is invoked through `npx` on purpose. `npm ci` does install the
+# `prisma migrate deploy` applies the versioned migration files in prisma/migrations/
+# without prompting and without data loss warnings — it generates the exact SQL
+# we already reviewed locally. It is safe to re-run on every boot: already-applied
+# migrations are skipped, so a container restart is a no-op.
+#
+# `prisma db push` is intentionally NOT used here: it bypasses the migration
+# history and refuses to add a unique constraint if any existing rows could
+# conflict (even NULL values in an optional column), which is what was causing
+# the crash-loop after the security-hardening changes.
+#
+# Every binary is invoked through `npx` on purpose. `npm ci` installs
 # devDependencies (prisma and ts-node are both devDeps), but node images do NOT
 # put node_modules/.bin on PATH — so a bare `ts-node` exits 127 "not found" and
-# the container crash-loops. `npx` resolves the local binary, which is why the
-# `npx prisma db push` half of this line has always worked.
-CMD ["sh", "-c", "npx prisma db push && npx ts-node src/seed.ts && node dist/main.js"]
+# the container crash-loops. `npx` resolves the local binary correctly.
+CMD ["sh", "-c", "npx prisma migrate deploy && npx ts-node src/seed.ts && node dist/main.js"]
