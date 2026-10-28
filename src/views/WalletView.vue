@@ -36,7 +36,7 @@
           <span class="balance__pill">کارمزد {{ faPercent(auth.feePercent, 2) }}</span>
         </div>
 
-        <div v-if="!auth.user?.verifiedAt" class="balance__unverified">
+        <div v-if="!auth.isVerified" class="balance__unverified">
           <span class="material-icons">warning_amber</span>
           حساب تأییدنشده — واریز با رسید دستی انجام می‌شود
         </div>

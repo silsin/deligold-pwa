@@ -23,7 +23,7 @@
           type="button"
           class="qo__pay-btn"
           :class="{ 'is-on': payMethod === 'wallet' }"
-          :disabled="!auth.user?.verifiedAt"
+          :disabled="!auth.isVerified"
           @click="payMethod = 'wallet'"
         >
           <i class="material-icons">account_balance_wallet</i>
@@ -40,7 +40,7 @@
         </button>
       </div>
 
-      <p v-if="side === 'BUY' && !auth.user?.verifiedAt" class="qo__pay-hint">
+      <p v-if="side === 'BUY' && !auth.isVerified" class="qo__pay-hint">
         <i class="material-icons">verified_user</i>
         خرید از کیف پول پس از تأیید هویت فعال می‌شود.
       </p>
@@ -205,7 +205,11 @@ watch(() => props.open, (isOpen) => {
     showCheckout.value = false
     showDeposit.value = false
     pendingOrder.value = null
-    payMethod.value = auth.user?.verifiedAt ? 'wallet' : 'receipt'
+    payMethod.value = auth.isVerified ? 'wallet' : 'receipt'
+    // Pick up a verification the broker manager granted since login.
+    auth.fetchProfile().then(() => {
+      if (auth.isVerified && payMethod.value === 'receipt' && !amount.value) payMethod.value = 'wallet'
+    })
   }
 })
 
