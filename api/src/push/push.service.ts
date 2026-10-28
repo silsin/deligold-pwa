@@ -35,7 +35,7 @@ function buildPayload(event: PushEvent): NotifyPayload {
         title: 'سفارش جدید',
         body: `سفارش ${event.ref} — ${event.grams} گرم ${event.symbol}`,
         icon: ICON, tag: 'NEW_ORDER',
-        data: { url: '/desk' },
+        data: { url: '/review' },
       };
 
     case 'ORDER_STATUS': {
@@ -44,7 +44,7 @@ function buildPayload(event: PushEvent): NotifyPayload {
           title: 'رسید بارگذاری شد',
           body: `سفارش ${event.ref} منتظر بررسی است`,
           icon: ICON, tag: 'ORDER_STATUS_REVIEW',
-          data: { url: '/desk' },
+          data: { url: '/review' },
         };
       }
       if (event.status === 'APPROVED') {
@@ -225,7 +225,7 @@ export class PushService implements OnModuleInit {
       case 'NEW_ORDER':
         await this.sendToBrokerManagers(event.brokerId, payload);
         await this.saveForManagers(event.brokerId, {
-          title: payload.title, body: payload.body, kind: event.type, url: '/desk',
+          title: payload.title, body: payload.body, kind: event.type, url: '/review',
         });
         // Also notify the customer who placed the order
         await this.sendToUser(event.userId, {
@@ -254,7 +254,7 @@ export class PushService implements OnModuleInit {
         if (event.status === 'PENDING_REVIEW') {
           await this.sendToBrokerManagers(event.brokerId, payload);
           await this.saveForManagers(event.brokerId, {
-            title: payload.title, body: payload.body, kind: event.type, url: '/desk',
+            title: payload.title, body: payload.body, kind: event.type, url: '/review',
           });
         } else {
           await this.sendToUser(event.userId, payload);

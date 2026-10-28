@@ -34,7 +34,7 @@
           <!-- Top row: ref + side badge -->
           <div class="card__top">
             <div class="card__ref">
-              <b class="tnum">#{{ shortId(o.id) }}</b>
+              <b class="tnum">{{ o.ref || '#' + shortId(o.id) }}</b>
               <span class="side-badge" :class="o.side === 'SELL' ? 'is-sell' : 'is-buy'">
                 {{ o.side === 'SELL' ? 'فروش' : 'خرید' }}
               </span>
@@ -70,8 +70,13 @@
             مشاهده رسید پرداخت
           </a>
 
+          <p v-if="isAwaiting(o)" class="awaiting-hint">
+            <i class="material-icons">hourglass_top</i>
+            مشتری هنوز رسید پرداخت را ارسال نکرده است
+          </p>
+
           <!-- Review note -->
-          <label class="field">
+          <label v-if="!isAwaiting(o)" class="field">
             <span class="field__label">یادداشت بررسی</span>
             <input
               v-model="notes[o.id]"
@@ -84,7 +89,7 @@
           </label>
 
           <!-- Action buttons -->
-          <div class="actions">
+          <div v-if="!isAwaiting(o)" class="actions">
             <button
               type="button"
               class="btn btn--primary btn--sm"
@@ -146,14 +151,18 @@ function statusFa(o) {
   if (s.includes('REJECT')) return 'رد شده'
   if (s.includes('APPROV') || s.includes('CONFIRM')) return 'تأیید شده'
   if (s.includes('FULFILL')) return 'تحویل‌شده'
+  if (s === 'AWAITING_RECEIPT') return 'در انتظار رسید'
   return 'در انتظار بررسی'
 }
+
+const isAwaiting = o => String(o.status || '').toUpperCase() === 'AWAITING_RECEIPT'
 
 function statusClass(o) {
   const s = String(o.status || '').toUpperCase()
   if (s.includes('REJECT')) return 'is-reject'
   if (s.includes('APPROV') || s.includes('CONFIRM')) return 'is-ok'
   if (s.includes('FULFILL')) return 'is-done'
+  if (s === 'AWAITING_RECEIPT') return 'is-muted'
   return 'is-warn'
 }
 
@@ -384,4 +393,7 @@ onMounted(() => { if (auth.isLoggedIn) load() })
   animation: spin 0.9s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+.awaiting-hint { display: flex; align-items: center; gap: 6px; margin: 4px 0 0; font-size: 12px; color: var(--text-muted); }
+.awaiting-hint .material-icons { font-size: 16px; }
+.badge.is-muted { background: var(--surface); color: var(--text-muted); }
 </style>

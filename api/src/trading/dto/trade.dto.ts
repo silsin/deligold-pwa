@@ -1,6 +1,7 @@
 import {
   IsBoolean,
   IsEnum,
+  IsIn,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -39,6 +40,15 @@ export class PlaceOrderDto {
   @IsString()
   @MaxLength(500)
   deliveryAddress?: string;
+
+  /**
+   * How a BUY is paid. WALLET settles instantly from the cash balance (verified
+   * customers only); RECEIPT always creates a MANUAL order awaiting a bank
+   * receipt. Omitted, the server picks by verification status.
+   */
+  @IsOptional()
+  @IsIn(['WALLET', 'RECEIPT'], { message: 'روش پرداخت نامعتبر است' })
+  payment?: 'WALLET' | 'RECEIPT';
 }
 
 /**

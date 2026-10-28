@@ -90,6 +90,7 @@ export class TradingController {
       grams: dto.grams,
       fulfillment: dto.fulfillment,
       deliveryAddress: dto.deliveryAddress,
+      payment: dto.payment,
     });
   }
 

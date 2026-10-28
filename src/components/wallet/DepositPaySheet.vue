@@ -110,6 +110,7 @@
 import { computed, ref } from 'vue'
 import { faMoney } from '../../utils/format'
 import { useAuthStore } from '../../stores/auth'
+import { uploadFile } from '../../utils/api'
 
 const props = defineProps({
   deposit: { type: Object, default: null },
@@ -147,9 +148,13 @@ async function onReceipt(e) {
   uploading.value = true
   error.value = ''
   try {
-    receiptPath.value = await auth.uploadReceipt(file)
+    // A deposit receipt is a plain file upload; auth.uploadReceipt is for orders.
+    const { path } = await uploadFile(file)
+    receiptPath.value = path || ''
     if (receiptPath.value) receiptName.value = file.name
     else error.value = 'بارگذاری رسید ناموفق بود'
+  } catch (err) {
+    error.value = err?.message || 'بارگذاری رسید ناموفق بود'
   } finally {
     uploading.value = false
   }

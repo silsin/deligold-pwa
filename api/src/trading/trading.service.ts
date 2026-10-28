@@ -270,7 +270,7 @@ export class TradingService {
    */
   async placeOrder(
     userId: string,
-    input: { symbol: string; side: OrderSide; grams: number; fulfillment?: FulfillmentMethod; deliveryAddress?: string },
+    input: { symbol: string; side: OrderSide; grams: number; fulfillment?: FulfillmentMethod; deliveryAddress?: string; payment?: 'WALLET' | 'RECEIPT' },
   ): Promise<OrderView> {
     const symbol = (input.symbol ?? '').trim();
     const side: OrderSide = input.side === 'SELL' ? 'SELL' : 'BUY';
@@ -294,6 +294,19 @@ export class TradingService {
     await this.permissions.canTrade(userId, symbol, side);
 
     const verified = user.verifiedAt !== null;
+
+    // A bank-transfer buy is a MANUAL order for anyone who asks for one.
+    if (side === 'BUY' && input.payment === 'RECEIPT') {
+      return this.createManualOrder(userId, symbol, weight, input.fulfillment, input.deliveryAddress, user.brokerId, user.role);
+    }
+
+    // A wallet buy must never silently turn into a receipt order.
+    if (!verified && input.payment === 'WALLET') {
+      throw new TradeError(
+        'خرید از کیف پول فقط برای حساب‌های تأییدشده ممکن است. از روش کارت به کارت استفاده کنید یا مدارک خود را از بخش پروفایل ارسال کنید',
+        403,
+      );
+    }
 
     // An unverified customer may only BUY, and only through the receipt flow.
     if (!verified) {
@@ -533,7 +546,8 @@ export class TradingService {
   }
 
   /**
-   * The broker manager's queue: every order awaiting review, in their broker.
+   * The broker manager's queue: every open MANUAL order in their broker —
+   * new ones still waiting on the customer's receipt, and ones ready to review.
    *
    * A manager only ever sees their own organisation's customers — hence the
    * `brokerId` filter on the user — while a SUPER_ADMIN sees everything, which
@@ -544,7 +558,7 @@ export class TradingService {
   ): Promise<OrderView[]> {
     const rows = await this.prisma.order.findMany({
       where: {
-        status: 'PENDING_REVIEW',
+        status: { in: ['AWAITING_RECEIPT', 'PENDING_REVIEW'] },
         kind: 'MANUAL',
         ...(actor.role === 'SUPER_ADMIN'
           ? {}

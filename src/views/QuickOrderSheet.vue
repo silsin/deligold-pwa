@@ -23,6 +23,7 @@
           type="button"
           class="qo__pay-btn"
           :class="{ 'is-on': payMethod === 'wallet' }"
+          :disabled="!auth.user?.verifiedAt"
           @click="payMethod = 'wallet'"
         >
           <i class="material-icons">account_balance_wallet</i>
@@ -39,6 +40,10 @@
         </button>
       </div>
 
+      <p v-if="side === 'BUY' && !auth.user?.verifiedAt" class="qo__pay-hint">
+        <i class="material-icons">verified_user</i>
+        خرید از کیف پول پس از تأیید هویت فعال می‌شود.
+      </p>
       <p v-if="payMethod === 'receipt' && side === 'BUY'" class="qo__pay-hint">
         <i class="material-icons">info_outline</i>
         سفارش ثبت می‌شود و مبلغ را واریز می‌کنید. رسید را از تاریخچه معاملات بارگذاری کنید.
@@ -223,6 +228,7 @@ async function submit() {
         symbol: props.symbol,
         side: 'BUY',
         grams: grams.value,
+        payment: 'RECEIPT',
       })
       if (!result.ok) {
         error.value = result.error || 'ثبت سفارش ناموفق بود'
@@ -280,7 +286,8 @@ async function handleCheckoutConfirm() {
     const result = await auth.placeOrder({
       symbol: pendingOrder.value.symbol,
       side: pendingOrder.value.side,
-      grams: pendingOrder.value.grams
+      grams: pendingOrder.value.grams,
+      ...(pendingOrder.value.side === 'BUY' ? { payment: 'WALLET' } : {})
     })
     if (!result.ok) {
       error.value = result.error || 'ثبت سفارش ناموفق بود'
@@ -353,6 +360,7 @@ function handleDepositClose() {
 .qo__pay-methods { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0 0; }
 .qo__pay-btn { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 11px 8px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); font-size: 12px; font-weight: 800; transition: border-color 0.15s, background 0.15s, color 0.15s; }
 .qo__pay-btn .material-icons { font-size: 20px; }
+.qo__pay-btn:disabled { opacity: 0.45; }
 .qo__pay-btn.is-on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
 .qo__pay-hint { display: flex; align-items: flex-start; gap: 6px; margin: 8px 0 0; padding: 9px 11px; border-radius: 10px; background: color-mix(in srgb, #d99a00 10%, var(--card)); color: #b07a00; font-size: 11.5px; line-height: 1.6; }
 .qo__pay-hint .material-icons { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
