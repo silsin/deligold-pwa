@@ -106,3 +106,21 @@ api.interceptors.response.use(
     return Promise.reject(error)
   }
 )
+
+/**
+ * Upload a single file to POST /uploads.
+ * Returns { path } — the server-generated relative path.
+ */
+export async function uploadFile(file) {
+  const form = new FormData()
+  form.append('file', file)
+  const token = getToken()
+  const res = await axios.post(`${baseURL}uploads`, form, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    timeout: 60000,
+  })
+  return res.data?.data ?? res.data
+}

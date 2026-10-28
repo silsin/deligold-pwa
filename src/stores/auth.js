@@ -612,6 +612,27 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  async function uploadReceipt(orderId, file, note = '', fulfillment = null, deliveryAddress = '') {
+    loading.value = true;
+    error.value = '';
+    try {
+      const { uploadFile } = await import('../utils/api.js');
+      const { path } = await uploadFile(file);
+      const payload = { receiptPath: path, receiptNote: note || undefined };
+      if (fulfillment) payload.fulfillment = fulfillment;
+      if (deliveryAddress) payload.deliveryAddress = deliveryAddress;
+      const data = await api.post(`/trade/orders/${orderId}/receipt`, payload);
+      const order = data?.order ?? data;
+      await fetchOrders();
+      return { ok: true, order };
+    } catch (e) {
+      error.value = e.message || 'ارسال رسید ناموفق بود';
+      return { ok: false, error: error.value };
+    } finally {
+      loading.value = false;
+    }
+  }
+
   async function submitReceipt(orderId, payload) {
     loading.value = true;
     error.value = '';

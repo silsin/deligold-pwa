@@ -231,7 +231,7 @@ async function handleCheckoutConfirm() {
     showCheckout.value = false
     pendingOrder.value = null
     if (order?.kind === 'MANUAL') {
-      success.value = `سفارش ${order.ref ?? ''} ثبت شد — برای بارگذاری رسید به صفحه معامله بروید`
+      success.value = `سفارش ${order.ref ?? ''} ثبت شد — برای ارسال رسید بانکی به تاریخچه معاملات بروید`
     } else {
       success.value = `${props.side === 'BUY' ? 'خرید' : 'فروش'} ${symbolShort.value} ثبت شد`
       amount.value = ''
