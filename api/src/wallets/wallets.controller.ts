@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { IsNotEmpty, IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 import { Role } from '@prisma/client';
 import { CurrentUser, type AuthUser } from '../auth/current-user.decorator';
@@ -43,6 +44,16 @@ class RequestWithdrawalDto {
   @IsString()
   @MaxLength(300)
   note?: string;
+
+  /**
+   * Client-generated UUID for idempotency. Identical key = same withdrawal
+   * returned, never a duplicate debit. Frontend should generate a fresh UUID
+   * per user intent (not per retry of the same intent).
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  idempotencyKey?: string;
 }
 
 /** Staff roles allowed to approve cash movement. */
@@ -63,6 +74,7 @@ export class WalletsController {
   // ── Customer ──────────────────────────────────────────────────────────────
 
   /** Asks to top up. The balance is untouched until staff approve it. */
+  @Throttle({ short: { limit: 10, ttl: 60_000 } })
   @Post('deposits')
   requestDeposit(@CurrentUser() user: AuthUser, @Body() dto: RequestDepositDto) {
     return this.wallets.requestDeposit(user.userId, {
@@ -83,12 +95,14 @@ export class WalletsController {
    * Asks to cash out. The balance is debited immediately and held as a payable
    * until staff actually send the money, so it cannot be spent twice.
    */
+  @Throttle({ short: { limit: 5, ttl: 60_000 } })
   @Post('withdrawals')
   requestWithdrawal(@CurrentUser() user: AuthUser, @Body() dto: RequestWithdrawalDto) {
     return this.wallets.requestWithdrawal(user.userId, {
       amount: dto.amount,
       destination: dto.destination,
       note: dto.note,
+      idempotencyKey: dto.idempotencyKey,
     });
   }
 

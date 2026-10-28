@@ -297,6 +297,21 @@ export class AuthService {
     return toPublicUser(user);
   }
 
+  /**
+   * Immediately invalidates every outstanding access token for a user by
+   * incrementing their tokenVersion. All active JWT tokens carry the old
+   * version and will be rejected on the next request. Call this whenever you
+   * suspect a compromise or when suspending an account.
+   */
+  async revokeTokens(userId: string): Promise<void> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { tokenVersion: { increment: 1 } },
+    });
+    // Also wipe all refresh token sessions — device re-login required.
+    await this.prisma.session.deleteMany({ where: { userId } });
+  }
+
   /** Signs an access token, mints a refresh token, and records the session. */
   private async issue(user: User): Promise<AuthResult> {
     const accessToken = await this.jwt.signAsync({
@@ -304,6 +319,7 @@ export class AuthService {
       role: user.role,
       brokerId: user.brokerId,
       name: user.name,
+      tv: user.tokenVersion,   // token version — validated on every request
     });
 
     const refreshToken = randomBytes(48).toString('base64url');

@@ -46,6 +46,12 @@ model User {
   role      Role       @default(CUSTOMER)
   status    UserStatus @default(ACTIVE)
 
+  /// ── Security ──────────────────────────────────────────────────────────────
+  /// Incremented whenever the account is suspended or a compromise is detected.
+  /// The JWT carries this value; a mismatch means the token pre-dates the
+  /// revocation event and is rejected immediately — no wait for expiry.
+  tokenVersion Int @default(0)
+
   /// ── Verification badge (تأیید هویت) ──────────────────────────────────────
   /// A customer whose profile is complete AND who has been checked by staff
   /// gets this timestamp, and the app shows them a ✓ badge.
@@ -238,7 +244,17 @@ model Wallet {
   /// reconcile to it.
   balance     Decimal @default(0) 
   /// Total P/L realised across closed trades.
-  realizedPnl Decimal @default(0) 
+  realizedPnl Decimal @default(0)
+
+  /// ── Withdrawal security ───────────────────────────────────────────────────
+  /// JSON array of trusted IBAN strings the user has withdrawn to before.
+  /// A withdrawal to a destination not in this list is held for 24 h before
+  /// processing — this single rule stops the #1 account-takeover drain pattern
+  /// (change IBAN → withdraw immediately) with zero friction on the normal path.
+  trustedDestinations String @default("[]")
+  /// When the destination list was last modified, so the 24-h cooldown can be
+  /// measured from the change rather than the withdrawal request.
+  destinationsUpdatedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -430,6 +446,10 @@ model Withdrawal {
   note         String?
   approvedById String?
   approvedAt   DateTime?
+  /// Client-supplied UUID that makes this request idempotent: a duplicate
+  /// submission with the same key returns the existing row instead of creating
+  /// a second withdrawal. Null = legacy row (no key supplied).
+  idempotencyKey String? @unique
   createdAt    DateTime         @default(now())
 
   @@index([walletId, createdAt])

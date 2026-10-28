@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PushService } from '../push/push.service';
 import { TradeError } from '../common/errors';
 import { RANK, assignableRoles } from '../auth/roles';
-import { toPublicUser, type PublicUser } from '../auth/auth.service';
+import { AuthService, toPublicUser, type PublicUser } from '../auth/auth.service';
 import { ChangeRoleDto, CreateUserDto, UpdateProfileDto } from './dto/users.dto';
 import * as bcrypt from 'bcryptjs';
 
@@ -21,6 +21,7 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly push: PushService,
+    private readonly auth: AuthService,
   ) {}
 
   // ── Own profile ───────────────────────────────────────────────────────────
@@ -294,6 +295,10 @@ export class UsersService {
 
     const updated = await this.prisma.user.update({ where: { id: targetId }, data: { status } });
     if (status === 'SUSPENDED') {
+      // Revoke all outstanding tokens immediately — the user cannot keep trading
+      // on a JWT that was issued before the suspension. Fire-and-forget; the push
+      // notification is the user-facing confirmation.
+      void this.auth.revokeTokens(targetId).catch(() => undefined);
       this.push.notify({ type: 'ACCOUNT_SUSPENDED', userId: targetId });
     }
     return toPublicUser(updated);

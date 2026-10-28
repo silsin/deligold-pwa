@@ -1,29 +1,40 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { Role } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
 import type { AuthUser } from './current-user.decorator';
 
 /**
  * Validates the Bearer token the PWA sends on every request.
  *
- * The payload is deliberately thin — id, role, broker, name — so the guard can
- * authenticate a request without touching the database. Anything that must be
- * current (a suspended account, a role revoked a second ago) is re-checked by
- * the services that matter; a per-request user lookup would double the database
- * traffic for a decision almost every endpoint does not need.
+ * The payload carries a `tokenVersion` that must match the value stored on the
+ * User row. Incrementing `tokenVersion` (e.g. on account suspension or a
+ * detected compromise) instantly invalidates every outstanding token for that
+ * user — no need to wait for expiry.
+ *
+ * We also re-check `status` here so a suspended account cannot keep trading
+ * on a token that was issued before the suspension. The DB hit is a single
+ * indexed primary-key lookup and only fires when the token is otherwise valid,
+ * so the overhead is minimal compared to a rejected or expired token that never
+ * reaches this point.
  */
 interface JwtPayload {
   sub: string;
   role: Role;
   brokerId: string | null;
   name: string;
+  /** Snapshot of User.tokenVersion at issue time. */
+  tv: number;
 }
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(config: ConfigService) {
+  constructor(
+    config: ConfigService,
+    private readonly prisma: PrismaService,
+  ) {
     const secret = config.get<string>('JWT_SECRET');
     if (!secret) {
       // Fail at boot, not on the first login: a missing secret would otherwise
@@ -37,7 +48,21 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  validate(payload: JwtPayload): AuthUser {
+  async validate(payload: JwtPayload): Promise<AuthUser> {
+    // Fast path: look up only the two fields we need to check.
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: { status: true, tokenVersion: true },
+    });
+
+    if (!user) throw new UnauthorizedException();
+
+    // Account suspended → reject immediately, no grace period.
+    if (user.status !== 'ACTIVE') throw new UnauthorizedException('حساب شما فعال نیست');
+
+    // Token was issued before the last revocation event → reject.
+    if (user.tokenVersion !== (payload.tv ?? 0)) throw new UnauthorizedException();
+
     return {
       userId: payload.sub,
       role: payload.role,

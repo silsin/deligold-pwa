@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+import { PrismaModule } from '../prisma/prisma.module';
 import { PushModule } from '../push/push.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -19,6 +20,7 @@ import { parseDurationSeconds } from './auth-duration';
 @Module({
   imports: [
     PassportModule,
+    PrismaModule,
     PushModule,
     JwtModule.registerAsync({
       inject: [ConfigService],

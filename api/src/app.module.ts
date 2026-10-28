@@ -1,6 +1,7 @@
 import { BadRequestException, Controller, Module, Post, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
@@ -68,6 +69,15 @@ class UploadsController {
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    // Global rate limiting — two buckets:
+    //   short: protects aggressive endpoints (login, withdrawals)
+    //   long:  general API fairness
+    // Legitimate users never hit these limits; they exist purely to stop
+    // brute-force and automated abuse.
+    ThrottlerModule.forRoot([
+      { name: 'short', ttl: 60_000, limit: 20 },
+      { name: 'long',  ttl: 60_000, limit: 200 },
+    ]),
     PrismaModule,
     AuthModule,
     UsersModule,
@@ -89,6 +99,9 @@ class UploadsController {
     // Order matters: JwtAuthGuard attaches the user, then RolesGuard reads it.
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    // Global throttler guard — enforces the ThrottlerModule buckets on every
+    // route. Individual controllers can override limits with @Throttle().
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
 export class AppModule {}
