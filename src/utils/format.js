@@ -52,7 +52,9 @@ export function faTime(ts) {
 
 /** "۲ دقیقه پیش" style relative time. */
 export function faAgo(ts) {
-  const seconds = Math.max(0, Math.floor((Date.now() - Number(ts)) / 1000))
+  const d = ts instanceof Date ? ts : new Date(ts)
+  const seconds = Math.max(0, Math.floor((Date.now() - d.getTime()) / 1000))
+  if (Number.isNaN(seconds)) return '—'
   if (seconds < 60) return `${toFa(seconds)} ثانیه پیش`
   const minutes = Math.floor(seconds / 60)
   if (minutes < 60) return `${toFa(minutes)} دقیقه پیش`
