@@ -216,7 +216,7 @@ async function submit() {
   }
 
   // Receipt / bank-transfer path — place MANUAL order directly, skip wallet check
-  if (side === 'BUY' && payMethod.value === 'receipt') {
+  if (props.side === 'BUY' && payMethod.value === 'receipt') {
     busy.value = true
     try {
       const result = await auth.placeOrder({
