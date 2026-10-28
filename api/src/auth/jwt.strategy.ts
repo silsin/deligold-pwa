@@ -49,10 +49,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload): Promise<AuthUser> {
-    // Fast path: look up only the two fields we need to check.
+    // Role and broker come from the row, not the token: a manager assigned to a
+    // broker (or promoted) after logging in would otherwise keep a stale scope
+    // and see an empty review queue until they re-login.
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { status: true, tokenVersion: true },
+      select: { status: true, tokenVersion: true, role: true, brokerId: true },
     });
 
     if (!user) throw new UnauthorizedException();
@@ -65,8 +67,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     return {
       userId: payload.sub,
-      role: payload.role,
-      brokerId: payload.brokerId ?? null,
+      role: user.role,
+      brokerId: user.brokerId ?? null,
       name: payload.name,
     };
   }
