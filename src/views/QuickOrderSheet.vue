@@ -17,6 +17,33 @@
         <b>{{ side === 'BUY' ? faMoney(auth.balance) : `${faWeight(held)} ${unit}` }}</b>
       </div>
 
+      <!-- Payment method selector (BUY only) -->
+      <div v-if="side === 'BUY'" class="qo__pay-methods">
+        <button
+          type="button"
+          class="qo__pay-btn"
+          :class="{ 'is-on': payMethod === 'wallet' }"
+          @click="payMethod = 'wallet'"
+        >
+          <i class="material-icons">account_balance_wallet</i>
+          کیف پول
+        </button>
+        <button
+          type="button"
+          class="qo__pay-btn"
+          :class="{ 'is-on': payMethod === 'receipt' }"
+          @click="payMethod = 'receipt'"
+        >
+          <i class="material-icons">receipt_long</i>
+          کارت به کارت
+        </button>
+      </div>
+
+      <p v-if="payMethod === 'receipt' && side === 'BUY'" class="qo__pay-hint">
+        <i class="material-icons">info_outline</i>
+        سفارش ثبت می‌شود و مبلغ را واریز می‌کنید. رسید را از تاریخچه معاملات بارگذاری کنید.
+      </p>
+
       <label class="qo__field">
         <span>مقدار ({{ unit }})</span>
         <div class="qo__input">
@@ -108,6 +135,9 @@ const busy = ref(false)
 const error = ref('')
 const success = ref('')
 
+// Payment method: 'wallet' = from balance, 'receipt' = bank transfer
+const payMethod = ref('wallet')
+
 // Checkout flow state
 const showCheckout = ref(false)
 const showDeposit = ref(false)
@@ -170,6 +200,7 @@ watch(() => props.open, (isOpen) => {
     showCheckout.value = false
     showDeposit.value = false
     pendingOrder.value = null
+    payMethod.value = auth.user?.verifiedAt ? 'wallet' : 'receipt'
   }
 })
 
@@ -183,6 +214,34 @@ async function submit() {
   if (!canSubmit.value) {
     return
   }
+
+  // Receipt / bank-transfer path — place MANUAL order directly, skip wallet check
+  if (side === 'BUY' && payMethod.value === 'receipt') {
+    busy.value = true
+    try {
+      const result = await auth.placeOrder({
+        symbol: props.symbol,
+        side: 'BUY',
+        grams: grams.value,
+      })
+      if (!result.ok) {
+        error.value = result.error || 'ثبت سفارش ناموفق بود'
+        return
+      }
+      const order = result.order
+      success.value = `سفارش ${order.ref ?? ''} ثبت شد — برای ارسال رسید بانکی به تاریخچه معاملات بروید`
+      amount.value = ''
+      percent.value = 0
+      await auth.fetchAccount()
+      emit('done', order)
+    } catch (e) {
+      error.value = e.message || 'ثبت سفارش ناموفق بود'
+    } finally {
+      busy.value = false
+    }
+    return
+  }
+
   busy.value = true
   try {
     // Fetch fresh wallet balance
@@ -295,6 +354,12 @@ function handleDepositClose() {
 .sheet__title.is-buy { color: var(--up); }
 .sheet__title.is-sell { color: var(--down); }
 .sheet__close { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 9px; background: var(--surface); color: var(--text-muted); font-size: 18px; }
+.qo__pay-methods { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0 0; }
+.qo__pay-btn { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 11px 8px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); font-size: 12px; font-weight: 800; transition: border-color 0.15s, background 0.15s, color 0.15s; }
+.qo__pay-btn .material-icons { font-size: 20px; }
+.qo__pay-btn.is-on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
+.qo__pay-hint { display: flex; align-items: flex-start; gap: 6px; margin: 8px 0 0; padding: 9px 11px; border-radius: 10px; background: color-mix(in srgb, #d99a00 10%, var(--card)); color: #b07a00; font-size: 11.5px; line-height: 1.6; }
+.qo__pay-hint .material-icons { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
 .qo__sym { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 12px 0; padding: 11px 13px; border-radius: 12px; border: 1px solid var(--border); background: var(--card); font-size: 13px; }
 .qo__sym b { font-weight: 900; }
 .qo__sym span { font-weight: 800; color: var(--accent); }
