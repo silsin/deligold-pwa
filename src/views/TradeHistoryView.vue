@@ -100,6 +100,39 @@
             </div>
 
             <template v-else>
+              <!-- Fulfillment method -->
+              <div class="fulfill-row">
+                <span class="fulfill-label">نحوه تحویل طلا:</span>
+                <div class="fulfill-btns">
+                  <button
+                    type="button"
+                    class="fulfill-btn"
+                    :class="{ 'is-on': receiptFulfillment[o.id] === 'PICKUP' }"
+                    @click="receiptFulfillment[o.id] = 'PICKUP'"
+                  >
+                    <i class="material-icons">store</i> حضوری
+                  </button>
+                  <button
+                    type="button"
+                    class="fulfill-btn"
+                    :class="{ 'is-on': receiptFulfillment[o.id] === 'DELIVERY' }"
+                    @click="receiptFulfillment[o.id] = 'DELIVERY'"
+                  >
+                    <i class="material-icons">local_shipping</i> ارسال پستی
+                  </button>
+                </div>
+              </div>
+
+              <!-- Delivery address (only when DELIVERY selected) -->
+              <input
+                v-if="receiptFulfillment[o.id] === 'DELIVERY'"
+                v-model="receiptAddresses[o.id]"
+                class="note-input"
+                type="text"
+                maxlength="500"
+                placeholder="آدرس تحویل (الزامی برای ارسال پستی)"
+              />
+
               <!-- File picker -->
               <label class="file-label">
                 <input
@@ -127,7 +160,7 @@
               <button
                 type="button"
                 class="btn btn--primary btn--upload"
-                :disabled="!receiptFiles[o.id] || uploadBusy[o.id]"
+                :disabled="!receiptFiles[o.id] || !receiptFulfillment[o.id] || uploadBusy[o.id]"
                 @click="sendReceipt(o)"
               >
                 <i class="material-icons">{{ uploadBusy[o.id] ? 'hourglass_empty' : 'upload' }}</i>
@@ -203,11 +236,13 @@ const downloadBusy = reactive({})
 const downloadError = ref('')
 
 // ── Receipt upload state ─────────────────────────────────────────────────
-const receiptFiles  = reactive({})   // orderId → File
-const receiptNotes  = reactive({})   // orderId → string
-const uploadBusy    = reactive({})   // orderId → bool
-const receiptError  = reactive({})   // orderId → string
-const receiptSuccess = reactive({})  // orderId → bool
+const receiptFiles       = reactive({})   // orderId → File
+const receiptNotes       = reactive({})   // orderId → string
+const receiptFulfillment = reactive({})   // orderId → 'PICKUP' | 'DELIVERY'
+const receiptAddresses   = reactive({})   // orderId → string
+const uploadBusy         = reactive({})   // orderId → bool
+const receiptError       = reactive({})   // orderId → string
+const receiptSuccess     = reactive({})   // orderId → bool
 
 function onFileChange(orderId, event) {
   const file = event.target.files?.[0]
@@ -224,6 +259,8 @@ async function sendReceipt(order) {
     order.id,
     file,
     receiptNotes[order.id] || '',
+    receiptFulfillment[order.id] || 'PICKUP',
+    receiptAddresses[order.id] || '',
   )
   uploadBusy[order.id] = false
   if (ok) {
