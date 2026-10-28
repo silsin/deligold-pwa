@@ -152,6 +152,7 @@ export class TradingController {
     return this.trading.reviewOrder(user, id, {
       approve: dto.approve,
       note: dto.note,
+      refund: dto.refund,
     });
   }
 

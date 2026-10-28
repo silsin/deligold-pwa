@@ -588,6 +588,149 @@ export class TradingService {
   }
 
   /**
+   * Rejects an order and, where the customer's money is held, returns it to
+   * their cash wallet.
+   *
+   * - A wallet trade (TRADE / FILLED) is reversed exactly: a BUY gives back
+   *   amount + fee and removes the gold; a SELL takes back the credit and
+   *   restores the gold. Always refunded — the money really left the wallet.
+   * - A MANUAL order still waiting on its receipt has nothing to refund.
+   * - A MANUAL order with a receipt (PENDING_REVIEW) is refunded only when the
+   *   manager says so: the money went to the bank, and a fake receipt must not
+   *   turn into wallet credit.
+   *
+   * The reason is required and is sent to the customer as a message and a push.
+   */
+  async rejectOrder(
+    actor: { userId: string; role: string; brokerId: string | null },
+    orderId: string,
+    note: string,
+    refund: boolean,
+  ): Promise<OrderView> {
+    const reason = note.trim();
+    if (!reason) throw new TradeError('برای رد سفارش باید دلیل بنویسید');
+
+    const order = await this.prisma.order.findUnique({ where: { id: orderId }, include: ORDER_INCLUDE });
+    if (!order) throw new TradeError('سفارش یافت نشد', 404);
+    this.assertSameBroker(actor, order);
+
+    const isWalletTrade = order.kind === 'TRADE' && order.status === 'FILLED';
+    const isManualOpen = order.kind === 'MANUAL' && (order.status === 'AWAITING_RECEIPT' || order.status === 'PENDING_REVIEW');
+    if (!isWalletTrade && !isManualOpen) {
+      throw new TradeError('این سفارش در وضعیتی نیست که بتوان آن را رد کرد');
+    }
+
+    const weight = dec(order.grams);
+    const price = dec(order.price);
+    const amount = dec(order.amount);
+    const fee = dec(order.fee);
+    const refundManual = order.kind === 'MANUAL' && order.status === 'PENDING_REVIEW' && refund;
+    // Cash moved into the wallet (negative = taken back, for a SELL reversal).
+    let refunded = 0;
+
+    const rejected = await this.prisma.$transaction(async tx => {
+      const w = await tx.wallet.upsert({ where: { userId: order.userId }, create: { userId: order.userId }, update: {} });
+
+      if (isWalletTrade && order.side === 'BUY') {
+        const pos = await tx.position.findUnique({ where: { walletId_symbol: { walletId: w.id, symbol: order.symbol } } });
+        const held = dec(pos?.grams);
+        if (!pos || held + EPSILON < weight) {
+          throw new TradeError('مشتری این مقدار طلا را دیگر در حساب ندارد؛ رد سفارش ممکن نیست');
+        }
+        const left = roundGrams(held - weight);
+        if (left <= EPSILON) {
+          await tx.position.delete({ where: { id: pos.id } });
+        } else {
+          // Undo this buy's share of the weighted average cost.
+          const avg = (dec(pos.avgCost) * held - price * weight) / left;
+          await tx.position.update({ where: { id: pos.id }, data: { grams: left, avgCost: avg > 0 ? avg : dec(pos.avgCost) } });
+        }
+        refunded = money(amount + fee);
+        await tx.wallet.update({ where: { id: w.id }, data: { balance: { increment: refunded } } });
+      } else if (isWalletTrade && order.side === 'SELL') {
+        const credit = money(amount - fee);
+        if (dec(w.balance) + EPSILON < credit) {
+          throw new TradeError('موجودی نقدی مشتری برای برگشت این فروش کافی نیست');
+        }
+        const pnl = dec(order.pnl);
+        // Cost basis the sold gold had: realised = (price − avg) × grams − fee.
+        const soldAvg = weight > 0 ? price - (pnl + fee) / weight : price;
+        const pos = await tx.position.findUnique({ where: { walletId_symbol: { walletId: w.id, symbol: order.symbol } } });
+        const held = dec(pos?.grams);
+        const avg = weightedAvgCost(held, dec(pos?.avgCost), weight, soldAvg);
+        await tx.position.upsert({
+          where: { walletId_symbol: { walletId: w.id, symbol: order.symbol } },
+          create: { walletId: w.id, symbol: order.symbol, grams: roundGrams(weight), avgCost: avg },
+          update: { grams: roundGrams(held + weight), avgCost: avg },
+        });
+        refunded = -credit;
+        await tx.wallet.update({ where: { id: w.id }, data: { balance: { decrement: credit }, realizedPnl: { decrement: pnl } } });
+      } else if (refundManual) {
+        refunded = money(amount + fee);
+        await tx.wallet.update({ where: { id: w.id }, data: { balance: { increment: refunded } } });
+      }
+
+      return tx.order.update({
+        where: { id: orderId },
+        data: { status: 'REJECTED', reviewedById: actor.userId, reviewedAt: new Date(), reviewNote: reason },
+      });
+    });
+
+    if (refunded !== 0) await this.postRejection(order, Math.abs(refunded), isWalletTrade);
+
+    this.push.notify({
+      type: 'ORDER_STATUS', userId: order.userId, brokerId: order.user?.brokerId ?? '',
+      ref: rejected.ref, status: 'REJECTED', note: reason, refunded: refunded > 0 ? refunded : 0,
+    });
+    return toOrderView(rejected);
+  }
+
+  /**
+   * Journal for a rejection. A wallet trade posts the exact mirror of
+   * `postTrade`; a refunded MANUAL order is booked like a deposit, since the
+   * money it returns arrived by bank transfer.
+   */
+  private async postRejection(
+    order: { userId: string; symbol: string; side: string; ref: string; grams: Prisma.Decimal; amount: Prisma.Decimal; fee: Prisma.Decimal },
+    cash: number,
+    isWalletTrade: boolean,
+  ): Promise<void> {
+    const w = await this.ensureWallet(order.userId);
+    const memo = `رد سفارش ${order.ref}`;
+    const cashOwed = await this.accounts.find(ACCOUNTS.CUSTOMER_CASH_PAYABLE);
+
+    if (!isWalletTrade) {
+      const bank = await this.accounts.find(ACCOUNTS.CASH);
+      await this.ledger.post({
+        kind: 'ADJUSTMENT', userId: order.userId, walletId: w.id, memo,
+        lines: [
+          { accountId: bank.id, debit: cash, symbol: null },
+          { accountId: cashOwed.id, credit: cash, symbol: null },
+        ],
+      });
+      return;
+    }
+
+    const goldOwed = await this.accounts.find(ACCOUNTS.CUSTOMER_GOLD_PAYABLE);
+    const revenue = await this.accounts.find(ACCOUNTS.TRADING_REVENUE);
+    const weight = dec(order.grams);
+    const amount = dec(order.amount);
+    const fee = dec(order.fee);
+    const lines = order.side === 'BUY'
+      ? [
+          { accountId: goldOwed.id, debit: amount, symbol: order.symbol, grams: -weight },
+          { accountId: revenue.id, debit: fee, symbol: null },
+          { accountId: cashOwed.id, credit: cash, symbol: null },
+        ]
+      : [
+          { accountId: cashOwed.id, debit: cash, symbol: null },
+          { accountId: revenue.id, debit: fee, symbol: null },
+          { accountId: goldOwed.id, credit: amount, symbol: order.symbol, grams: weight },
+        ];
+    await this.ledger.post({ kind: 'ADJUSTMENT', userId: order.userId, walletId: w.id, memo, lines });
+  }
+
+  /**
    * Approves or rejects a MANUAL order.
    *
    * Approving is what finally credits the customer their gold — the payment has
@@ -597,8 +740,10 @@ export class TradingService {
   async reviewOrder(
     actor: { userId: string; role: string; brokerId: string | null },
     orderId: string,
-    decision: { approve: boolean; note?: string },
+    decision: { approve: boolean; note?: string; refund?: boolean },
   ): Promise<OrderView> {
+    if (!decision.approve) return this.rejectOrder(actor, orderId, decision.note ?? '', decision.refund !== false);
+
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       include: ORDER_INCLUDE,
@@ -608,24 +753,6 @@ export class TradingService {
       throw new TradeError('فقط سفارش‌های در انتظار بررسی قابل تأیید هستند');
     }
     this.assertSameBroker(actor, order);
-
-    if (!decision.approve && !decision.note?.trim()) {
-      throw new TradeError('برای رد سفارش باید دلیل بنویسید');
-    }
-
-    if (!decision.approve) {
-      const rejected = await this.prisma.order.update({
-        where: { id: orderId },
-        data: {
-          status: 'REJECTED',
-          reviewedById: actor.userId,
-          reviewedAt: new Date(),
-          reviewNote: decision.note!.trim(),
-        },
-      });
-      this.push.notify({ type: 'ORDER_STATUS', userId: order.userId, brokerId: order.user?.brokerId ?? '', ref: rejected.ref, status: 'REJECTED' });
-      return toOrderView(rejected);
-    }
 
     // Approving credits the gold the customer has already paid for. The cash
     // never entered the wallet, because it was paid to the bank by transfer —

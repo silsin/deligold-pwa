@@ -75,22 +75,28 @@
             مشتری هنوز رسید پرداخت را ارسال نکرده است
           </p>
 
-          <!-- Review note -->
-          <label v-if="!isAwaiting(o)" class="field">
-            <span class="field__label">یادداشت بررسی</span>
+          <!-- Review note — the reason is required to reject, and is sent to the customer -->
+          <label class="field">
+            <span class="field__label">یادداشت / دلیل رد</span>
             <input
               v-model="notes[o.id]"
               class="field__input"
               type="text"
               maxlength="200"
-              placeholder="توضیح (اختیاری)"
+              placeholder="برای رد سفارش، دلیل را بنویسید"
               :disabled="auth.loading"
             />
           </label>
+          <label v-if="o.status === 'PENDING_REVIEW'" class="refund">
+            <input v-model="refunds[o.id]" type="checkbox" :disabled="auth.loading" />
+            در صورت رد، مبلغ {{ faMoney((o.amount || 0) + (o.fee || 0)) }} به کیف پول مشتری برگردد
+          </label>
+          <p v-if="rowError[o.id]" class="alert">{{ rowError[o.id] }}</p>
 
           <!-- Action buttons -->
-          <div v-if="!isAwaiting(o)" class="actions">
+          <div class="actions">
             <button
+              v-if="!isAwaiting(o)"
               type="button"
               class="btn btn--primary btn--sm"
               :disabled="auth.loading"
@@ -107,6 +113,7 @@
               <i class="material-icons">close</i> رد
             </button>
             <button
+              v-if="!isAwaiting(o)"
               type="button"
               class="btn btn--sm"
               :disabled="auth.loading || !!(o.fulfilledAt || o.fulfilled)"
@@ -115,6 +122,7 @@
               <i class="material-icons">local_shipping</i> ثبت تحویل
             </button>
             <button
+              v-if="!isAwaiting(o)"
               type="button"
               class="btn btn--sm"
               :disabled="downloadBusy[o.id]"
@@ -147,6 +155,32 @@
             <span class="tnum">{{ o.grams }} گرم · {{ faMoney(o.amount) }}</span>
             <span class="badge" :class="statusClass(o)">{{ o.status === 'FILLED' ? 'انجام‌شده' : statusFa(o) }}</span>
           </div>
+          <p v-if="o.status === 'REJECTED' && o.reviewNote" class="recent__note">دلیل رد: {{ o.reviewNote }}</p>
+          <template v-if="o.kind === 'TRADE' && o.status === 'FILLED'">
+            <button v-if="!rejecting[o.id]" type="button" class="btn btn--danger btn--sm recent__reject" @click="rejecting[o.id] = true">
+              <i class="material-icons">undo</i> رد سفارش
+            </button>
+            <div v-else class="recent__reject-form">
+              <input
+                v-model="notes[o.id]"
+                class="field__input"
+                type="text"
+                maxlength="200"
+                placeholder="دلیل رد (برای مشتری ارسال می‌شود)"
+                :disabled="auth.loading"
+              />
+              <p class="recent__hint">
+                {{ o.side === 'BUY'
+                  ? `مبلغ ${faMoney((o.amount || 0) + (o.fee || 0))} به کیف پول برمی‌گردد و طلا از حساب مشتری کسر می‌شود`
+                  : `طلا به حساب مشتری برمی‌گردد و مبلغ ${faMoney((o.amount || 0) - (o.fee || 0))} از کیف پول کسر می‌شود` }}
+              </p>
+              <p v-if="rowError[o.id]" class="alert">{{ rowError[o.id] }}</p>
+              <div class="actions">
+                <button type="button" class="btn btn--danger btn--sm" :disabled="auth.loading" @click="review(o.id, false)">تأیید رد</button>
+                <button type="button" class="btn btn--sm" :disabled="auth.loading" @click="rejecting[o.id] = false">انصراف</button>
+              </div>
+            </div>
+          </template>
         </li>
       </ul>
     </template>
@@ -165,6 +199,9 @@ const orders = ref([])
 const recent = ref([])
 const loading = ref(false)
 const notes = reactive({})
+const refunds = reactive({})   // orderId → refund on reject (PENDING_REVIEW only)
+const rejecting = reactive({}) // orderId → reject form open (recent list)
+const rowError = reactive({})  // orderId → message
 const downloadBusy = reactive({})
 
 const shortId = id => String(id ?? '').slice(0, 8)
@@ -195,12 +232,24 @@ async function load() {
     const [queue, all] = await Promise.all([auth.reviewQueue(), auth.brokerOrders()])
     orders.value = queue
     recent.value = all
+    // Refund defaults on; the manager unticks it for a receipt they doubt.
+    for (const o of queue) if (refunds[o.id] === undefined) refunds[o.id] = true
   } finally { loading.value = false }
 }
 
 async function review(id, approve) {
-  const { ok } = await auth.reviewOrder(id, approve, notes[id] || '')
-  if (ok) await load()
+  rowError[id] = ''
+  if (!approve && !(notes[id] || '').trim()) {
+    rowError[id] = 'برای رد سفارش باید دلیل بنویسید'
+    return
+  }
+  const { ok, error } = await auth.reviewOrder(id, approve, notes[id] || '', refunds[id] !== false)
+  if (ok) {
+    rejecting[id] = false
+    await load()
+  } else {
+    rowError[id] = error
+  }
 }
 
 async function fulfill(id) {
@@ -429,4 +478,9 @@ onMounted(() => { if (auth.isLoggedIn) load() })
 .recent__main, .recent__meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
 .recent__meta { justify-content: space-between; color: var(--text-muted); }
 .recent__kind { margin-inline-start: auto; font-size: 11.5px; color: var(--text-muted); }
+.refund { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--text-muted); }
+.recent__note { margin: 0; font-size: 12px; color: var(--down); }
+.recent__reject { align-self: flex-start; }
+.recent__reject-form { display: flex; flex-direction: column; gap: 6px; }
+.recent__hint { margin: 0; font-size: 11.5px; color: var(--text-muted); }
 </style>

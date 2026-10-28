@@ -684,11 +684,11 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function reviewOrder(orderId, approve, note = '') {
+  async function reviewOrder(orderId, approve, note = '', refund = true) {
     loading.value = true;
     error.value = '';
     try {
-      const data = await api.post(`/trade/orders/${orderId}/review`, { approve, note });
+      const data = await api.post(`/trade/orders/${orderId}/review`, { approve, note, refund });
       const order = data?.order ?? data;
       await Promise.all([fetchOrders(), fetchWallet()]);
       return { ok: true, order };

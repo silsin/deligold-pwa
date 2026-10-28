@@ -84,6 +84,10 @@
             </span>
           </div>
 
+          <p v-if="o.status === 'REJECTED' && o.reviewNote" class="reject-note">
+            <i class="material-icons">error_outline</i> دلیل رد: {{ o.reviewNote }}
+          </p>
+
           <!-- ── Receipt upload (AWAITING_RECEIPT only) ── -->
           <template v-if="o.status === 'AWAITING_RECEIPT'">
             <div class="receipt-hint">
@@ -494,4 +498,6 @@ onMounted(() => {
 /* Spinner */
 .spin { animation: spin 0.9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+.reject-note { display: flex; align-items: center; gap: 6px; margin: 8px 0 0; font-size: 12px; color: var(--down); }
+.reject-note .material-icons { font-size: 16px; }
 </style>

@@ -17,7 +17,7 @@ export interface NotifyPayload {
 
 export type PushEvent =
   | { type: 'NEW_ORDER';           userId: string; brokerId: string; ref: string; symbol: string; grams: number }
-  | { type: 'ORDER_STATUS';        userId: string; brokerId: string; ref: string; status: string }
+  | { type: 'ORDER_STATUS';        userId: string; brokerId: string; ref: string; status: string; note?: string; refunded?: number }
   | { type: 'NEW_DEPOSIT';         userId: string; brokerId: string; ref: string; amount: number }
   | { type: 'DEPOSIT_DECISION';    userId: string; ref: string; approved: boolean }
   | { type: 'NEW_WITHDRAWAL';      userId: string; brokerId: string; ref: string; amount: number }
@@ -58,7 +58,11 @@ function buildPayload(event: PushEvent): NotifyPayload {
       if (event.status === 'REJECTED') {
         return {
           title: 'سفارش رد شد',
-          body: `سفارش ${event.ref} شما رد شد`,
+          body: [
+            `سفارش ${event.ref} شما رد شد`,
+            event.note ? `دلیل: ${event.note}` : '',
+            event.refunded ? `مبلغ ${event.refunded.toLocaleString('fa-IR')} تومان به کیف پول شما برگشت` : '',
+          ].filter(Boolean).join(' — '),
           icon: ICON, tag: 'ORDER_REJECTED',
           data: { url: '/orders' },
         };

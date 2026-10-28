@@ -90,4 +90,12 @@ export class ReviewOrderDto {
   @IsString()
   @MaxLength(500)
   note?: string;
+
+  /**
+   * On rejecting a MANUAL order that has a receipt: return amount + fee to the
+   * customer's wallet. Defaults to true; wallet trades are always refunded.
+   */
+  @IsOptional()
+  @IsBoolean()
+  refund?: boolean;
 }
